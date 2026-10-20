@@ -5,7 +5,8 @@ resources:
     job_hunter_etl:
       name: job_hunter_etl
       catalog: ${var.catalog}
-      schema: ${var.schema}
+      # Referencing the schema resource makes the bundle create it before the pipeline.
+      schema: ${resources.schemas.medallion.name}
       serverless: true
       root_path: "../src/job_hunter_etl"
 

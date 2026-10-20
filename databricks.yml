@@ -23,6 +23,10 @@ variables:
   runner_sp:
     description: Application ID of the 'runner' service principal used for CI/CD and job runs.
     default: dfb84752-414e-4c6b-9946-59d3e848e9f0
+  maintainer:
+    description: >
+      Email of the human maintainer who gets access to prod resources. No default, so no personal
+      email is stored in the repo. Set via BUNDLE_VAR_maintainer or --var="maintainer=...".
 
 targets:
   dev:
@@ -32,8 +36,10 @@ targets:
     workspace:
       host: https://dbc-d12bb884-312f.cloud.databricks.com
     variables:
-      # Personal schema per developer, e.g. cihangiray_oner_medallion. Catalog stays the default.
+      # Personal schema per developer (<short_name>_medallion), resolved at deploy time. Catalog stays the default.
       schema: ${workspace.current_user.short_name}_medallion
+      # In dev the maintainer is whoever deploys, so nothing needs to be passed in.
+      maintainer: ${workspace.current_user.userName}
 
   prod:
     # Deployed by GitHub Actions authenticated as the 'runner' service principal.
@@ -48,5 +54,13 @@ targets:
     permissions:
       - service_principal_name: ${var.runner_sp}
         level: CAN_MANAGE
-      - user_name: cihangiray.oner@gmail.com
+      - user_name: ${var.maintainer}
         level: CAN_MANAGE
+    resources:
+      schemas:
+        medallion:
+          # The service principal owns the prod schema; give the human maintainer access too.
+          grants:
+            - principal: ${var.maintainer}
+              privileges:
+                - ALL_PRIVILEGES

@@ -16,6 +16,8 @@ env:
   DATABRICKS_HOST: https://dbc-d12bb884-312f.cloud.databricks.com
   DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
   DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+  # Fills ${var.maintainer} in databricks.yml without storing the email in the repo.
+  BUNDLE_VAR_maintainer: ${{ secrets.DATABRICKS_MAINTAINER }}
 
 jobs:
   validate:

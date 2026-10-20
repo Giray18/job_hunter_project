@@ -1,0 +1,10 @@
+# The schema the job and pipeline write to.
+# dev:  <short_name>_medallion, created and owned by the deploying developer.
+# prod: medallion, created and owned by the 'runner' service principal (deployed from CI).
+
+resources:
+  schemas:
+    medallion:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: Medallion layer tables for job_hunter (${bundle.target}).
