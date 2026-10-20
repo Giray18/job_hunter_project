@@ -11,6 +11,8 @@ artifacts:
   python_artifact:
     type: whl
     build: uv build --wheel
+    # Unique wheel version per deploy, so serverless never reuses a cached older build.
+    dynamic_version: true
 
 # Variable declarations. Targets below can override these defaults.
 variables:
@@ -23,6 +25,15 @@ variables:
   runner_sp:
     description: Application ID of the 'runner' service principal used for CI/CD and job runs.
     default: dfb84752-414e-4c6b-9946-59d3e848e9f0
+  secret_scope:
+    description: Databricks secret scope holding gmail_client_id, gmail_client_secret and gmail_refresh_token.
+    default: job_hunter
+  gmail_query:
+    description: Gmail search query selecting the job-alert emails to ingest.
+    default: "from:jobalerts-noreply@linkedin.com newer_than:3d"
+  max_postings_per_run:
+    description: Maximum number of LinkedIn job pages fetched per run.
+    default: 100
   maintainer:
     description: >
       Email of the human maintainer who gets access to prod resources. No default, so no personal

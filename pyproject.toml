@@ -26,6 +26,8 @@ dev = [
 
 [project.scripts]
 main = "job_hunter.main:main"
+ingest_emails = "job_hunter.tasks.ingest_emails:main"
+fetch_postings = "job_hunter.tasks.fetch_postings:main"
 
 [build-system]
 requires = ["hatchling"]
