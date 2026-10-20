@@ -34,6 +34,12 @@ variables:
   max_postings_per_run:
     description: Maximum number of LinkedIn job pages fetched per run.
     default: 100
+  llm_model:
+    description: Foundation Model API endpoint used for translation and enrichment.
+    default: databricks-gpt-oss-120b
+  max_enrich_per_run:
+    description: Maximum number of job postings enriched by the LLM per run.
+    default: 200
   maintainer:
     description: >
       Email of the human maintainer who gets access to prod resources. No default, so no personal

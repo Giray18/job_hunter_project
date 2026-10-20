@@ -37,13 +37,14 @@ def main():
     emails = storage.full_name(args.catalog, args.schema, storage.EMAILS_TABLE)
     postings = storage.full_name(args.catalog, args.schema, storage.POSTINGS_TABLE)
 
-    # Newest job ids that have no successful fetch yet.
+    # Newest job ids without a final fetch outcome yet (read OK, or removed by LinkedIn).
+    final = ", ".join(str(s) for s in storage.FINAL_HTTP_STATUSES)
     pending = [
         r.job_id
         for r in spark.sql(f"""
             SELECT c.job_id, max(c.received_at) AS last_seen
             FROM (SELECT inline(job_cards), received_at FROM {emails}) c
-            LEFT ANTI JOIN (SELECT job_id FROM {postings} WHERE http_status = 200) p
+            LEFT ANTI JOIN (SELECT job_id FROM {postings} WHERE http_status IN ({final})) p
               ON p.job_id = c.job_id
             GROUP BY c.job_id
             ORDER BY last_seen DESC
@@ -68,12 +69,13 @@ def main():
             spark.createDataFrame(rows, storage.POSTINGS_SCHEMA),
             postings,
             ["job_id"],
-            update_when="t.http_status <> 200",
+            update_when=f"t.http_status NOT IN ({final})",
         )
 
     ok = sum(1 for r in rows if r[7] == 200)
-    print(f"Fetched {len(rows)} posting(s): {ok} OK, {len(rows) - ok} failed")
-    if rows and ok == 0:
+    removed = sum(1 for r in rows if r[7] == 404)
+    print(f"Fetched {len(rows)} posting(s): {ok} OK, {removed} removed (404), {len(rows) - ok - removed} failed")
+    if rows and ok + removed == 0:
         raise RuntimeError("No job posting could be fetched; LinkedIn may be blocking requests")
 
 

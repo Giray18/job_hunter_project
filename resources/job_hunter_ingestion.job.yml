@@ -42,6 +42,23 @@ resources:
               - "${var.max_postings_per_run}"
           environment_key: default
 
+        - task_key: enrich_jobs
+          depends_on:
+            - task_key: fetch_postings
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: enrich_jobs
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+              - "--model"
+              - "${var.llm_model}"
+              - "--max-jobs"
+              - "${var.max_enrich_per_run}"
+          environment_key: default
+
       environments:
         - environment_key: default
           spec:

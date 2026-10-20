@@ -1,4 +1,4 @@
-"""Bronze table definitions and an idempotent MERGE helper."""
+"""Medallion table definitions and an idempotent MERGE helper."""
 
 import uuid
 
@@ -6,6 +6,10 @@ from pyspark.sql import DataFrame, SparkSession
 
 EMAILS_TABLE = "bronze_job_alert_emails"
 POSTINGS_TABLE = "bronze_job_postings"
+SILVER_JOBS_TABLE = "silver_jobs"
+
+# Fetch outcomes that are final: the posting was read, or LinkedIn removed it.
+FINAL_HTTP_STATUSES = (200, 404)
 
 JOB_CARD_TYPE = "STRUCT<job_id: STRING, url: STRING, title: STRING, company: STRING, location: STRING>"
 
@@ -33,9 +37,27 @@ POSTINGS_SCHEMA = """
     fetched_at TIMESTAMP
 """
 
+SILVER_JOBS_SCHEMA = """
+    job_id STRING NOT NULL,
+    language STRING,
+    title_en STRING,
+    description_en STRING,
+    summary STRING,
+    skills ARRAY<STRING>,
+    seniority STRING,
+    work_mode STRING,
+    country STRING,
+    city STRING,
+    min_years_experience INT,
+    model STRING,
+    source_fetched_at TIMESTAMP,
+    enriched_at TIMESTAMP
+"""
+
 _TABLES = {
     EMAILS_TABLE: (EMAILS_SCHEMA, "LinkedIn job-alert emails from Gmail (URL query strings stripped)."),
     POSTINGS_TABLE: (POSTINGS_SCHEMA, "LinkedIn job postings ('About the job' text and criteria) by job id."),
+    SILVER_JOBS_TABLE: (SILVER_JOBS_SCHEMA, "Job postings translated to English with LLM-extracted matching fields."),
 }
 
 
