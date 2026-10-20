@@ -1,0 +1,50 @@
+# Milestone 1: LinkedIn job alerts (Gmail) → job descriptions → bronze tables.
+
+resources:
+  jobs:
+    job_hunter_ingestion:
+      name: job_hunter_ingestion
+      max_concurrent_runs: 1
+
+      # Daily at 08:00 Istanbul time. Paused automatically in dev (mode: development).
+      schedule:
+        quartz_cron_expression: "0 0 8 * * ?"
+        timezone_id: Europe/Istanbul
+
+      tasks:
+        - task_key: ingest_emails
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: ingest_emails
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+              - "--secret-scope"
+              - "${var.secret_scope}"
+              - "--query"
+              - "${var.gmail_query}"
+          environment_key: default
+
+        - task_key: fetch_postings
+          depends_on:
+            - task_key: ingest_emails
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: fetch_postings
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+              - "--max-postings"
+              - "${var.max_postings_per_run}"
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl

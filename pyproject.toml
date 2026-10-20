@@ -9,6 +9,9 @@ dependencies = [
     #
     # LIMITATION: for pipelines, dependencies are cached during development;
     # add dependencies to the 'environment' section of your pipeline.yml file instead
+    "google-api-python-client>=2.201.0",
+    "google-auth>=2.47.0",
+    "requests>=2.32.5",
 ]
 
 [dependency-groups]
@@ -18,10 +21,13 @@ dev = [
     "databricks-dlt",
     "databricks-connect~=18.0.0",
     "ipykernel",
+    "google-auth-oauthlib>=1.5.0",
 ]
 
 [project.scripts]
 main = "job_hunter.main:main"
+ingest_emails = "job_hunter.tasks.ingest_emails:main"
+fetch_postings = "job_hunter.tasks.fetch_postings:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -29,6 +35,10 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120
+
+[tool.pytest.ini_options]
+# Only collect tests/; the root-level test_connect.py is a manual Databricks Connect smoke script.
+testpaths = ["tests"]
 
 [tool.databricks.environment]
 environment_version = "5"

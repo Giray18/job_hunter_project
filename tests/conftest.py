@@ -18,16 +18,26 @@ except ImportError:
     )
 
 
-@pytest.fixture()
-def spark() -> SparkSession:
-    """Provide a SparkSession fixture for tests.
+@pytest.fixture(scope="session")
+def spark(pytestconfig: pytest.Config) -> SparkSession:
+    """Provide a SparkSession fixture for tests, created on first use.
+
+    Tests that need it should be marked `@pytest.mark.databricks`, so CI can run
+    `pytest -m "not databricks"` without a workspace.
 
     Minimal example:
+        @pytest.mark.databricks
         def test_uses_spark(spark):
             df = spark.createDataFrame([(1,)], ["x"])
             assert df.count() == 1
     """
-    return DatabricksSession.builder.getOrCreate()
+    with _allow_stderr_output(pytestconfig):
+        _enable_fallback_compute()
+
+        # For DB Connect 15+, validate version compatibility with the remote cluster.
+        if hasattr(DatabricksSession.builder, "validateSession"):
+            return DatabricksSession.builder.validateSession().getOrCreate()
+        return DatabricksSession.builder.getOrCreate()
 
 
 @pytest.fixture()
@@ -82,13 +92,4 @@ def _allow_stderr_output(config: pytest.Config):
 
 def pytest_configure(config: pytest.Config):
     """Configure pytest session."""
-    with _allow_stderr_output(config):
-        _enable_fallback_compute()
-
-        # Initialize Spark session eagerly, so it is available even when
-        # SparkSession.builder.getOrCreate() is used. For DB Connect 15+,
-        # we validate version compatibility with the remote cluster.
-        if hasattr(DatabricksSession.builder, "validateSession"):
-            DatabricksSession.builder.validateSession().getOrCreate()
-        else:
-            DatabricksSession.builder.getOrCreate()
+    config.addinivalue_line("markers", "databricks: needs a Databricks workspace (Databricks Connect)")

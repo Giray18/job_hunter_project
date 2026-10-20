@@ -9,3 +9,6 @@ scratch/**
 **/explorations/**
 **/!explorations/README.md
 *.bak
+
+# Local Gmail OAuth client secret and token - never commit
+.secrets/
