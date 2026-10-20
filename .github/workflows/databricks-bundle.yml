@@ -29,9 +29,19 @@ jobs:
       - uses: databricks/setup-cli@main
       - run: databricks bundle validate --strict -t prod
 
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      # Tests marked `databricks` need a live workspace (Databricks Connect) and are skipped in CI.
+      - run: uv run pytest -m "not databricks"
+
   deploy:
     name: Deploy to prod
-    needs: validate
+    needs: [validate, test]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod

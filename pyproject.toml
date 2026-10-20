@@ -34,6 +34,10 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 120
 
+[tool.pytest.ini_options]
+# Only collect tests/; the root-level test_connect.py is a manual Databricks Connect smoke script.
+testpaths = ["tests"]
+
 [tool.databricks.environment]
 environment_version = "5"
 
