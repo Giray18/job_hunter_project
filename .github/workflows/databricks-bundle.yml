@@ -1,0 +1,42 @@
+name: Databricks bundle CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: databricks-bundle-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Authenticate as the 'runner' service principal (OAuth M2M).
+  DATABRICKS_HOST: https://dbc-d12bb884-312f.cloud.databricks.com
+  DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+  DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+
+jobs:
+  validate:
+    name: Validate bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate --strict -t prod
+
+  deploy:
+    name: Deploy to prod
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle deploy -t prod
+      # Optional: trigger the job right after deploying (it also runs daily on its own trigger).
+      # - run: databricks bundle run sample_job -t prod --no-wait

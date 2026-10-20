@@ -1,0 +1,52 @@
+# This is a Declarative Automation Bundle definition for job_hunter.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: job_hunter
+  uuid: 62512e40-8dd5-4113-ae43-8c2447e69f6b
+
+include:
+  - resources/*.yml
+
+artifacts:
+  python_artifact:
+    type: whl
+    build: uv build --wheel
+
+# Variable declarations. Targets below can override these defaults.
+variables:
+  catalog:
+    description: The catalog to use for the project.
+    default: job_hunter_project
+  schema:
+    description: The schema to use for the project.
+    default: medallion
+  runner_sp:
+    description: Application ID of the 'runner' service principal used for CI/CD and job runs.
+    default: dfb84752-414e-4c6b-9946-59d3e848e9f0
+
+targets:
+  dev:
+    # Personal development copy, deployed by a human from their machine.
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-d12bb884-312f.cloud.databricks.com
+    variables:
+      # Personal schema per developer, e.g. cihangiray_oner_medallion. Catalog stays the default.
+      schema: ${workspace.current_user.short_name}_medallion
+
+  prod:
+    # Deployed by GitHub Actions authenticated as the 'runner' service principal.
+    mode: production
+    workspace:
+      host: https://dbc-d12bb884-312f.cloud.databricks.com
+      # Resolves to the deploying identity's home folder (the service principal in CI).
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    # Jobs and pipelines run as the service principal, not as whoever deployed them.
+    run_as:
+      service_principal_name: ${var.runner_sp}
+    permissions:
+      - service_principal_name: ${var.runner_sp}
+        level: CAN_MANAGE
+      - user_name: cihangiray.oner@gmail.com
+        level: CAN_MANAGE
