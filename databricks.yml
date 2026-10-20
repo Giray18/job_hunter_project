@@ -46,9 +46,9 @@ targets:
     default: true
     workspace:
       host: https://dbc-d12bb884-312f.cloud.databricks.com
+    # Development mode prefixes UC schemas with dev_<short_name>_, so the schema resource
+    # becomes a personal dev_<short_name>_medallion. Reference it as ${resources.schemas.medallion.name}.
     variables:
-      # Personal schema per developer (<short_name>_medallion), resolved at deploy time. Catalog stays the default.
-      schema: ${workspace.current_user.short_name}_medallion
       # In dev the maintainer is whoever deploys, so nothing needs to be passed in.
       maintainer: ${workspace.current_user.userName}
 

@@ -41,11 +41,11 @@ def main():
     pending = [
         r.job_id
         for r in spark.sql(f"""
-            SELECT card.job_id, max(e.received_at) AS last_seen
-            FROM {emails} e LATERAL VIEW explode(e.job_cards) cards AS card
+            SELECT c.job_id, max(c.received_at) AS last_seen
+            FROM (SELECT inline(job_cards), received_at FROM {emails}) c
             LEFT ANTI JOIN (SELECT job_id FROM {postings} WHERE http_status = 200) p
-              ON p.job_id = card.job_id
-            GROUP BY card.job_id
+              ON p.job_id = c.job_id
+            GROUP BY c.job_id
             ORDER BY last_seen DESC
             LIMIT {args.max_postings}
         """).collect()

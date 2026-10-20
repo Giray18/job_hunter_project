@@ -45,9 +45,8 @@ def full_name(catalog: str, schema: str, table: str) -> str:
 
 def ensure_tables(spark: SparkSession, catalog: str, schema: str) -> None:
     for table, (columns, comment) in _TABLES.items():
-        spark.sql(
-            f"CREATE TABLE IF NOT EXISTS {full_name(catalog, schema, table)} ({columns}) COMMENT '{comment}'"
-        )
+        escaped = comment.replace("\\", "\\\\").replace("'", "\\'")
+        spark.sql(f"CREATE TABLE IF NOT EXISTS {full_name(catalog, schema, table)} ({columns}) COMMENT '{escaped}'")
 
 
 def merge(spark: SparkSession, source: DataFrame, target: str, keys: list[str], update_when: str | None = None) -> None:

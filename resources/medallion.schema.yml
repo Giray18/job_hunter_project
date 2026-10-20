@@ -1,5 +1,5 @@
 # The schema the job and pipeline write to.
-# dev:  <short_name>_medallion, created and owned by the deploying developer.
+# dev:  dev_<short_name>_medallion (development-mode prefix), owned by the deploying developer.
 # prod: medallion, created and owned by the 'runner' service principal (deployed from CI).
 
 resources:
