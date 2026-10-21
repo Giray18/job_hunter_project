@@ -20,14 +20,14 @@ def main():
     parser.add_argument("--allowed-seniority", default=matching.DEFAULT_ALLOWED_SENIORITY)
     parser.add_argument("--max-age-days", type=int, default=14)
     parser.add_argument("--max-judge", type=int, default=20)
-    parser.add_argument("--croatia-min-fit", type=int, default=60)
+    parser.add_argument("--priority-min-fit", type=int, default=60)
     parser.add_argument("--top-n", type=int, default=10)
     parser.add_argument("--parallelism", type=int, default=2)
     args = parser.parse_args()
 
     config = matching.MatchConfig.from_strings(
         args.target_country, args.remote_countries, args.allowed_seniority, args.max_age_days, args.max_judge,
-        args.croatia_min_fit,
+        args.priority_min_fit,
     )
 
     from databricks.sdk.runtime import spark
@@ -89,9 +89,9 @@ def main():
         for r in spark.sql(ranking.judged_jobs_sql(name(Table.SILVER_JOB_EMBEDDINGS), matches_table),
                            args={"min_first_seen": config.min_first_seen(now)}).collect()
     ]
-    top = ranking.top_jobs(ranked, config.croatia_min_fit, args.top_n)
+    top = ranking.top_jobs(ranked, config.priority_min_fit, args.top_n)
     print(f"Top {len(top)} of {len(ranked)} judged job(s) in the last {config.max_age_days} days:")
-    print(ranking.describe(top, config.croatia_min_fit))
+    print(ranking.describe(top, config.priority_min_fit))
 
 
 if __name__ == "__main__":

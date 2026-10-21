@@ -55,8 +55,10 @@ variables:
   max_judge_per_run:
     description: Shortlisted jobs scored by the LLM judge per run.
     default: 20
-  croatia_min_fit:
-    description: Fit score from which Croatian jobs rank ahead of remote jobs.
+  priority_min_fit:
+    description: >
+      Minimum fit score for the priority tiers (1 = Croatia, 2 = confirmed remote). Jobs below it compete with
+      unclear-remote jobs on fit score in tier 3.
     default: 60
   top_n:
     description: Number of best-ranked jobs per run; Milestone 5 tailors one CV for each.

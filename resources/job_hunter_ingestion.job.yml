@@ -112,8 +112,8 @@ resources:
               - "${var.max_job_age_days}"
               - "--max-judge"
               - "${var.max_judge_per_run}"
-              - "--croatia-min-fit"
-              - "${var.croatia_min_fit}"
+              - "--priority-min-fit"
+              - "${var.priority_min_fit}"
               - "--top-n"
               - "${var.top_n}"
           environment_key: default

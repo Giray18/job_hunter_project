@@ -18,23 +18,24 @@ class RankedJob:
     reasons: str
 
 
-def tier(job: RankedJob, croatia_min_fit: int) -> int:
-    """1 = Croatian job that is good enough; 2 = confirmed remote job abroad;
-    3 = weaker Croatian job or job abroad with unclear remote eligibility (these compete on fit score)."""
-    if job.priority is Priority.CROATIA and job.fit_score >= croatia_min_fit:
-        return 1
-    if job.priority is Priority.REMOTE:
-        return 2
+def tier(job: RankedJob, priority_min_fit: int) -> int:
+    """1 = Croatian job with fit >= priority_min_fit; 2 = confirmed remote job with fit >= priority_min_fit;
+    3 = everything else (weaker Croatian/remote jobs and unclear-remote jobs), competing on fit score."""
+    if job.fit_score >= priority_min_fit:
+        if job.priority is Priority.CROATIA:
+            return 1
+        if job.priority is Priority.REMOTE:
+            return 2
     return 3
 
 
-def rank(jobs: list[RankedJob], croatia_min_fit: int) -> list[RankedJob]:
+def rank(jobs: list[RankedJob], priority_min_fit: int) -> list[RankedJob]:
     eligible = [j for j in jobs if j.priority is not Priority.EXCLUDED]
-    return sorted(eligible, key=lambda j: (tier(j, croatia_min_fit), -j.fit_score, -j.similarity))
+    return sorted(eligible, key=lambda j: (tier(j, priority_min_fit), -j.fit_score, -j.similarity))
 
 
-def top_jobs(jobs: list[RankedJob], croatia_min_fit: int, n: int = 10) -> list[RankedJob]:
-    return rank(jobs, croatia_min_fit)[:n]
+def top_jobs(jobs: list[RankedJob], priority_min_fit: int, n: int = 10) -> list[RankedJob]:
+    return rank(jobs, priority_min_fit)[:n]
 
 
 def judged_jobs_sql(embeddings: str, matches: str) -> str:
@@ -63,11 +64,11 @@ def from_row(row: dict) -> RankedJob:
     )
 
 
-def describe(jobs: list[RankedJob], croatia_min_fit: int) -> str:
+def describe(jobs: list[RankedJob], priority_min_fit: int) -> str:
     lines = []
     for i, j in enumerate(jobs, 1):
         lines.append(
-            f"{i}. [{j.priority} t{tier(j, croatia_min_fit)}] fit {j.fit_score} sim {j.similarity:.3f} | "
+            f"{i}. [{j.priority} t{tier(j, priority_min_fit)}] fit {j.fit_score} sim {j.similarity:.3f} | "
             f"{j.title_en} | {j.company} | {j.country_code or '-'} | {j.url}"
         )
     return "\n".join(lines)

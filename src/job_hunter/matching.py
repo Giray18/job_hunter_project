@@ -30,21 +30,21 @@ class MatchConfig:
     allowed_seniority: tuple[Seniority, ...] = tuple(Seniority(s) for s in DEFAULT_ALLOWED_SENIORITY.split(","))
     max_age_days: int = 14
     max_judge: int = 20
-    croatia_min_fit: int = 60
+    priority_min_fit: int = 60
 
     @classmethod
     def from_strings(cls, target_country: str, remote_countries: str, allowed_seniority: str, max_age_days: int,
-                     max_judge: int, croatia_min_fit: int) -> "MatchConfig":
+                     max_judge: int, priority_min_fit: int) -> "MatchConfig":
         """Parse bundle-variable strings; invalid country codes or seniority values raise ValueError."""
-        if max_age_days <= 0 or max_judge <= 0 or not 0 <= croatia_min_fit <= 100:
-            raise ValueError("max_age_days and max_judge must be positive; croatia_min_fit must be 0-100")
+        if max_age_days <= 0 or max_judge <= 0 or not 0 <= priority_min_fit <= 100:
+            raise ValueError("max_age_days and max_judge must be positive; priority_min_fit must be 0-100")
         return cls(
             target_country=countries.normalize_code(target_country),
             remote_countries=tuple(countries.normalize_code(c) for c in remote_countries.split(",") if c.strip()),
             allowed_seniority=tuple(Seniority(s.strip()) for s in allowed_seniority.split(",") if s.strip()),
             max_age_days=max_age_days,
             max_judge=max_judge,
-            croatia_min_fit=croatia_min_fit,
+            priority_min_fit=priority_min_fit,
         )
 
     def min_first_seen(self, now: datetime) -> datetime:
