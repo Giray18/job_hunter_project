@@ -1,7 +1,7 @@
 """Medallion table definitions, additive schema migration and an idempotent MERGE helper."""
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from pyspark.sql import DataFrame, SparkSession
@@ -14,6 +14,8 @@ class Table(StrEnum):
     POSTINGS = "bronze_job_postings"
     SILVER_JOBS = "silver_jobs"
     SILVER_CV = "silver_cv"
+    SILVER_JOB_EMBEDDINGS = "silver_job_embeddings"
+    GOLD_JOB_MATCHES = "gold_job_matches"
 
 
 JOB_CARD_TYPE = "STRUCT<job_id: STRING, url: STRING, title: STRING, company: STRING, location: STRING>"
@@ -74,11 +76,42 @@ SILVER_CV_SCHEMA = """
 """
 
 
+SILVER_JOB_EMBEDDINGS_SCHEMA = """
+    job_id STRING NOT NULL,
+    match_text STRING,
+    embedding ARRAY<FLOAT>,
+    embedding_model STRING,
+    title_en STRING,
+    company STRING,
+    url STRING,
+    country_code STRING,
+    work_mode STRING,
+    seniority STRING,
+    first_seen_at TIMESTAMP,
+    embedded_at TIMESTAMP
+"""
+
+GOLD_JOB_MATCHES_SCHEMA = """
+    job_id STRING NOT NULL,
+    cv_version STRING NOT NULL,
+    similarity DOUBLE,
+    priority STRING,
+    fit_score INT,
+    remote_eligibility STRING,
+    reasons STRING,
+    matching_skills ARRAY<STRING>,
+    missing_skills ARRAY<STRING>,
+    model STRING,
+    judged_at TIMESTAMP
+"""
+
+
 @dataclass(frozen=True)
 class TableSpec:
     ddl: str
     record: type
     comment: str
+    properties: dict[str, str] = field(default_factory=dict)
 
 
 TABLES: dict[Table, TableSpec] = {
@@ -93,6 +126,16 @@ TABLES: dict[Table, TableSpec] = {
     ),
     Table.SILVER_CV: TableSpec(
         SILVER_CV_SCHEMA, records.CvVersion, "Parsed CV versions: structured JSON, matching text and embedding."
+    ),
+    Table.SILVER_JOB_EMBEDDINGS: TableSpec(
+        SILVER_JOB_EMBEDDINGS_SCHEMA,
+        records.JobEmbedding,
+        "One GTE embedding of match_text per job, plus filter columns. Source for the Vector Search index.",
+        # Delta Sync Vector Search indexes require Change Data Feed on the source table.
+        properties={"delta.enableChangeDataFeed": "true"},
+    ),
+    Table.GOLD_JOB_MATCHES: TableSpec(
+        GOLD_JOB_MATCHES_SCHEMA, records.JobMatch, "LLM-judged job fit per CV version, with location priority."
     ),
 }
 
@@ -126,6 +169,9 @@ def ensure_tables(spark: SparkSession, catalog: str, schema: str) -> None:
         target = full_name(catalog, schema, table)
         escaped = spec.comment.replace("\\", "\\\\").replace("'", "\\'")
         spark.sql(f"CREATE TABLE IF NOT EXISTS {target} ({spec.ddl}) COMMENT '{escaped}'")
+        if spec.properties:
+            props = ", ".join(f"'{k}' = '{v}'" for k, v in spec.properties.items())
+            spark.sql(f"ALTER TABLE {target} SET TBLPROPERTIES ({props})")
 
         existing = set(spark.table(target).columns)
         previous = None

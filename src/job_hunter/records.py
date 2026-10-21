@@ -28,6 +28,27 @@ class WorkMode(StrEnum):
     UNKNOWN = "unknown"
 
 
+class Priority(StrEnum):
+    """Location priority of a judged job."""
+
+    CROATIA = "croatia"
+    REMOTE = "remote"
+    REMOTE_UNCLEAR = "remote_unclear"
+    EXCLUDED = "excluded"
+
+
+class RemoteEligibility(StrEnum):
+    """Can the candidate (based in Zagreb) work this job without relocating?
+
+    Croatia: yes for remote/hybrid, no for onsite-only. Abroad: yes only for fully remote work open to
+    someone in Croatia; no if onsite/hybrid abroad or residency elsewhere is required; unclear if not stated.
+    """
+
+    YES = "yes"
+    NO = "no"
+    UNCLEAR = "unclear"
+
+
 # Fetch outcomes that are final: the posting was read, or LinkedIn removed it.
 FINAL_HTTP_STATUSES = (HTTPStatus.OK, HTTPStatus.NOT_FOUND)
 
@@ -112,6 +133,41 @@ class CvVersion:
     embedding_model: str
     parsed_at: datetime
     is_current: bool
+
+
+@dataclass(frozen=True)
+class JobEmbedding:
+    """Row of silver_job_embeddings."""
+
+    job_id: str
+    match_text: str
+    embedding: list[float]
+    embedding_model: str
+    title_en: str
+    company: str | None
+    url: str
+    country_code: str | None
+    work_mode: WorkMode
+    seniority: Seniority
+    first_seen_at: datetime | None
+    embedded_at: datetime
+
+
+@dataclass(frozen=True)
+class JobMatch:
+    """Row of gold_job_matches: one judged job for one CV version."""
+
+    job_id: str
+    cv_version: str
+    similarity: float
+    priority: Priority
+    fit_score: int
+    remote_eligibility: RemoteEligibility
+    reasons: str
+    matching_skills: list[str]
+    missing_skills: list[str]
+    model: str
+    judged_at: datetime
 
 
 def to_row(record: Any) -> tuple:

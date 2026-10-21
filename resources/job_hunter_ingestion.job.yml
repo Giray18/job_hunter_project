@@ -75,6 +75,49 @@ resources:
               - "${var.llm_model}"
           environment_key: default
 
+        - task_key: embed_jobs
+          depends_on:
+            - task_key: enrich_jobs
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: embed_jobs
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+          environment_key: default
+
+        - task_key: match_jobs
+          depends_on:
+            - task_key: embed_jobs
+            - task_key: process_cv
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: match_jobs
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+              - "--model"
+              - "${var.llm_model}"
+              - "--target-country"
+              - "${var.target_country}"
+              - "--remote-countries"
+              - "${var.remote_countries}"
+              - "--allowed-seniority"
+              - "${var.allowed_seniority}"
+              - "--max-age-days"
+              - "${var.max_job_age_days}"
+              - "--max-judge"
+              - "${var.max_judge_per_run}"
+              - "--priority-min-fit"
+              - "${var.priority_min_fit}"
+              - "--top-n"
+              - "${var.top_n}"
+          environment_key: default
+
       environments:
         - environment_key: default
           spec:
