@@ -16,6 +16,7 @@ class Table(StrEnum):
     SILVER_CV = "silver_cv"
     SILVER_JOB_EMBEDDINGS = "silver_job_embeddings"
     GOLD_JOB_MATCHES = "gold_job_matches"
+    GOLD_APPLICATIONS = "gold_applications"
 
 
 JOB_CARD_TYPE = "STRUCT<job_id: STRING, url: STRING, title: STRING, company: STRING, location: STRING>"
@@ -106,6 +107,21 @@ GOLD_JOB_MATCHES_SCHEMA = """
 """
 
 
+GOLD_APPLICATIONS_SCHEMA = """
+    job_id STRING NOT NULL,
+    cv_version STRING NOT NULL,
+    rank_position INT,
+    tier INT,
+    fit_score INT,
+    tailored_cv_json STRING,
+    cover_letter_text STRING,
+    cv_pdf_path STRING,
+    cover_letter_pdf_path STRING,
+    model STRING,
+    created_at TIMESTAMP
+"""
+
+
 @dataclass(frozen=True)
 class TableSpec:
     ddl: str
@@ -136,6 +152,10 @@ TABLES: dict[Table, TableSpec] = {
     ),
     Table.GOLD_JOB_MATCHES: TableSpec(
         GOLD_JOB_MATCHES_SCHEMA, records.JobMatch, "LLM-judged job fit per CV version, with location priority."
+    ),
+    Table.GOLD_APPLICATIONS: TableSpec(
+        GOLD_APPLICATIONS_SCHEMA, records.Application,
+        "Tailored CV and cover letter (text + PDF paths) per top-ranked job and CV version.",
     ),
 }
 

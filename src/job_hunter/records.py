@@ -170,6 +170,23 @@ class JobMatch:
     judged_at: datetime
 
 
+@dataclass(frozen=True)
+class Application:
+    """Row of gold_applications: tailored CV + cover letter generated for one ranked job."""
+
+    job_id: str
+    cv_version: str
+    rank_position: int
+    tier: int
+    fit_score: int
+    tailored_cv_json: str
+    cover_letter_text: str
+    cv_pdf_path: str
+    cover_letter_pdf_path: str
+    model: str
+    created_at: datetime
+
+
 def to_row(record: Any) -> tuple:
     """Dataclass → tuple of plain values (enums → values, nested dataclasses → tuples) for createDataFrame."""
     return tuple(_plain(getattr(record, f.name)) for f in fields(record))
