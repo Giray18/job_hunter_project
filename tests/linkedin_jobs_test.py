@@ -64,8 +64,11 @@ EASY_APPLY_BUTTON = """<button class="top-card-layout__cta--primary"
     [
         (EXTERNAL_BUTTON, ApplyType.EXTERNAL),
         (EASY_APPLY_BUTTON, ApplyType.EASY_APPLY),
-        ("<html>no apply button</html>", ApplyType.UNKNOWN),
+        ("<html>login wall, not a job page</html>", ApplyType.UNKNOWN),
         (EXTERNAL_BUTTON + EASY_APPLY_BUTTON, ApplyType.UNKNOWN),
+        # A real job page whose apply button is gone: LinkedIn no longer accepts applications.
+        ('<div class="top-card-layout__cta-container"><icon class="ellipsis-menu__item-icon"></icon></div>',
+         ApplyType.CLOSED),
     ],
 )
 def test_detect_apply_type(page, expected):

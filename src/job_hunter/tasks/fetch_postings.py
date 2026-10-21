@@ -6,8 +6,8 @@ from http import HTTPStatus
 
 import requests
 
-from job_hunter import linkedin_jobs, storage
-from job_hunter.records import FINAL_HTTP_STATUSES
+from job_hunter import application_status, linkedin_jobs, storage
+from job_hunter.records import FINAL_HTTP_STATUSES, ApplyType, StatusValue
 from job_hunter.storage import Table
 
 
@@ -17,8 +17,8 @@ def main():
     parser.add_argument("--schema", required=True)
     parser.add_argument("--max-postings", type=int, default=100)
     parser.add_argument("--delay-seconds", type=float, default=2.0)
-    parser.add_argument("--max-apply-type-backfill", type=int, default=20,
-                        help="Older postings per run re-read only to detect their apply type")
+    parser.add_argument("--max-recheck", type=int, default=40,
+                        help="Postings per run re-read to detect closed jobs and their apply type")
     args = parser.parse_args()
 
     from databricks.sdk.runtime import spark
@@ -69,28 +69,35 @@ def main():
         raise RuntimeError("No job posting could be fetched; LinkedIn may be blocking requests")
 
     rate_limited = any(p.http_status == HTTPStatus.TOO_MANY_REQUESTS for p in postings)
-    if not rate_limited and args.max_apply_type_backfill > 0:
-        backfill_apply_types(spark, args, postings_table, http)
+    if not rate_limited and args.max_recheck > 0:
+        recheck_open_jobs(spark, args, postings_table, http)
 
 
-def backfill_apply_types(spark, args, postings_table: str, http: requests.Session) -> None:
-    """Postings fetched before apply_type existed: re-read the page and update only apply_type.
+def recheck_open_jobs(spark, args, postings_table: str, http: requests.Session) -> None:
+    """Re-read the pages of jobs that can still reach the ranking, to catch postings that closed.
 
-    Only that column changes (fetched_at stays), so the job is not re-enriched by the LLM.
-    Jobs with a generated application go first, then judged jobs, then the rest.
+    Candidates, most important first: jobs with a generated application, judged jobs that are not excluded,
+    then postings never checked for their apply type. A job is re-checked at most once every 20 hours and
+    only when it has no status yet. Only apply_type / apply_checked_at change (fetched_at stays), so nothing
+    is re-enriched. Closed jobs get the status 'closed', which removes them from future rankings.
     """
-    matches = storage.full_name(args.catalog, args.schema, Table.GOLD_JOB_MATCHES)
-    applications = storage.full_name(args.catalog, args.schema, Table.GOLD_APPLICATIONS)
+    def name(table: Table) -> str:
+        return storage.full_name(args.catalog, args.schema, table)
+
     ids = [
         r.job_id
         for r in spark.sql(f"""
             SELECT p.job_id
             FROM {postings_table} p
-            LEFT JOIN (SELECT DISTINCT job_id FROM {applications}) a ON a.job_id = p.job_id
-            LEFT JOIN (SELECT DISTINCT job_id FROM {matches}) m ON m.job_id = p.job_id
-            WHERE p.http_status = 200 AND p.apply_type IS NULL
-            ORDER BY a.job_id IS NULL, m.job_id IS NULL, p.fetched_at DESC
-            LIMIT {int(args.max_apply_type_backfill)}
+            LEFT JOIN (SELECT DISTINCT job_id FROM {name(Table.GOLD_APPLICATIONS)}) a ON a.job_id = p.job_id
+            LEFT JOIN (SELECT job_id, max(fit_score) AS fit FROM {name(Table.GOLD_JOB_MATCHES)}
+                       WHERE priority <> 'excluded' GROUP BY job_id) m ON m.job_id = p.job_id
+            LEFT ANTI JOIN {name(Table.GOLD_APPLICATION_STATUS)} st ON st.job_id = p.job_id
+            WHERE p.http_status = 200
+              AND (p.apply_checked_at IS NULL OR p.apply_checked_at < current_timestamp() - INTERVAL 20 HOURS)
+              AND (a.job_id IS NOT NULL OR m.job_id IS NOT NULL OR p.apply_type IS NULL)
+            ORDER BY a.job_id IS NULL, m.fit DESC NULLS LAST, p.fetched_at DESC
+            LIMIT {int(args.max_recheck)}
         """).collect()
     ]
     if not ids:
@@ -99,15 +106,20 @@ def backfill_apply_types(spark, args, postings_table: str, http: requests.Sessio
     for job_id in ids:
         posting = linkedin_jobs.fetch_job_posting(job_id, http)
         if posting.http_status == HTTPStatus.TOO_MANY_REQUESTS:
-            print("Rate limited by LinkedIn during apply-type backfill; continuing next run")
+            print("Rate limited by LinkedIn during the re-check; continuing next run")
             break
         if posting.ok:
-            updates.append((job_id, posting.apply_type.value))
+            updates.append(posting)
         time.sleep(args.delay_seconds)
-    if updates:
-        source = spark.createDataFrame(updates, "job_id STRING, apply_type STRING")
-        storage.update_columns(spark, source, postings_table, keys=["job_id"], columns=["apply_type"])
-    print(f"Backfilled apply_type for {len(updates)} of {len(ids)} older posting(s)")
+    if not updates:
+        return
+    source = spark.createDataFrame([(p.job_id, p.apply_type.value, p.apply_checked_at) for p in updates],
+                                   "job_id STRING, apply_type STRING, apply_checked_at TIMESTAMP")
+    storage.update_columns(spark, source, postings_table, keys=["job_id"], columns=["apply_type", "apply_checked_at"])
+    closed = [p.job_id for p in updates if p.apply_type is ApplyType.CLOSED]
+    application_status.save(spark, args.catalog, args.schema, application_status.make_statuses(
+        closed, StatusValue.CLOSED, "pipeline", "LinkedIn no longer accepts applications"))
+    print(f"Re-checked {len(updates)} of {len(ids)} posting(s); {len(closed)} closed")
 
 
 if __name__ == "__main__":

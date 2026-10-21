@@ -17,6 +17,7 @@ class Table(StrEnum):
     SILVER_JOB_EMBEDDINGS = "silver_job_embeddings"
     GOLD_JOB_MATCHES = "gold_job_matches"
     GOLD_APPLICATIONS = "gold_applications"
+    GOLD_APPLICATION_STATUS = "gold_application_status"
 
 
 JOB_CARD_TYPE = "STRUCT<job_id: STRING, url: STRING, title: STRING, company: STRING, location: STRING>"
@@ -42,6 +43,7 @@ POSTINGS_SCHEMA = """
     description STRING,
     criteria MAP<STRING, STRING>,
     apply_type STRING,
+    apply_checked_at TIMESTAMP,
     http_status INT,
     fetched_at TIMESTAMP
 """
@@ -123,6 +125,15 @@ GOLD_APPLICATIONS_SCHEMA = """
 """
 
 
+GOLD_APPLICATION_STATUS_SCHEMA = """
+    job_id STRING NOT NULL,
+    status STRING,
+    source STRING,
+    notes STRING,
+    updated_at TIMESTAMP
+"""
+
+
 @dataclass(frozen=True)
 class TableSpec:
     ddl: str
@@ -158,6 +169,10 @@ TABLES: dict[Table, TableSpec] = {
         GOLD_APPLICATIONS_SCHEMA, records.Application,
         "Tailored CV and cover letter (text + PDF paths) per top-ranked job and CV version.",
     ),
+    Table.GOLD_APPLICATION_STATUS: TableSpec(
+        GOLD_APPLICATION_STATUS_SCHEMA, records.ApplicationStatus,
+        "Latest status per job (applied, skipped, closed, not_eligible); any status removes the job from rankings.",
+    ),
 }
 
 
@@ -184,9 +199,11 @@ def columns(ddl: str) -> list[tuple[str, str]]:
     return result
 
 
-def ensure_tables(spark: SparkSession, catalog: str, schema: str) -> None:
+def ensure_tables(spark: SparkSession, catalog: str, schema: str, only: list[Table] | None = None) -> None:
     """Create missing tables and add new columns to existing ones (additive migrations only)."""
     for table, spec in TABLES.items():
+        if only is not None and table not in only:
+            continue
         target = full_name(catalog, schema, table)
         escaped = spec.comment.replace("\\", "\\\\").replace("'", "\\'")
         spark.sql(f"CREATE TABLE IF NOT EXISTS {target} ({spec.ddl}) COMMENT '{escaped}'")

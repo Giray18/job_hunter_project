@@ -47,6 +47,7 @@ APPLY_INSTRUCTIONS = {
         'Open the apply link and click "Easy Apply" / "Kolay Başvuru". Fill in the LinkedIn form and upload the CV '
         "when asked."
     ),
+    ApplyType.CLOSED: "This posting no longer accepts applications on LinkedIn; skip it and record it as closed.",
     ApplyType.UNKNOWN: (
         'Open the apply link and click the apply button shown ("Apply" / "Başvur" or "Easy Apply" / '
         '"Kolay Başvuru"), then follow the form.'

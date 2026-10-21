@@ -26,7 +26,7 @@ VALID = {
 def _posting(description: str = "Wij zoeken een data analist.") -> JobPosting:
     return JobPosting(
         job_id="42", url="u", title="Data analist", company="we+", location="Bruges", description=description,
-        criteria={"Seniority level": "Mid"}, apply_type=ApplyType.EXTERNAL, http_status=200,
+        criteria={"Seniority level": "Mid"}, apply_type=ApplyType.EXTERNAL, apply_checked_at=NOW, http_status=200,
         fetched_at=NOW,
     )
 

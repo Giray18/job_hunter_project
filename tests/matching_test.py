@@ -64,7 +64,7 @@ def test_sql_filter_matches_python_mirror_on_duckdb():
 
 
 def test_shortlist_sql_uses_parameters_and_vector_function():
-    sql = matching.shortlist_sql("emb", "jobs", "cv", "matches", 20)
+    sql = matching.shortlist_sql("emb", "jobs", "cv", "matches", "statuses", 20)
     assert "vector_cosine_similarity(e.embedding, cv.embedding)" in sql
     assert "LIMIT 20" in sql
     for name in ("cv_version", "target_country", "remote_countries", "allowed_seniority", "min_first_seen"):
@@ -73,7 +73,7 @@ def test_shortlist_sql_uses_parameters_and_vector_function():
     assert "'HR'" not in sql and "'senior'" not in sql and "'remote'" not in sql
     assert set(re.findall(r":(\w+)", sql)) - {"cv_version"} == set(matching.filter_params(CONFIG, NOW))
     with pytest.raises(ValueError):
-        matching.shortlist_sql("emb", "jobs", "cv", "matches", 0)
+        matching.shortlist_sql("emb", "jobs", "cv", "matches", "statuses", 0)
 
 
 def test_config_from_strings_validates():
