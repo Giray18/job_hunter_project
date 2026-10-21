@@ -118,6 +118,33 @@ resources:
               - "${var.top_n}"
           environment_key: default
 
+        - task_key: tailor_applications
+          depends_on:
+            - task_key: match_jobs
+          python_wheel_task:
+            package_name: job_hunter
+            entry_point: tailor_applications
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "${resources.schemas.medallion.name}"
+              - "--output-dir"
+              - "/Volumes/${var.catalog}/${resources.schemas.medallion.name}/${resources.volumes.cv.name}/output"
+              - "--model"
+              - "${var.llm_model}"
+              - "--top-n"
+              - "${var.top_n}"
+              - "--priority-min-fit"
+              - "${var.priority_min_fit}"
+              - "--max-age-days"
+              - "${var.max_job_age_days}"
+              - "--availability-note"
+              - "${var.availability_note}"
+              - "--b2b-note"
+              - "${var.b2b_note}"
+          environment_key: default
+
       environments:
         - environment_key: default
           spec:

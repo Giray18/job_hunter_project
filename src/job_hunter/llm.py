@@ -32,11 +32,13 @@ def client():
 
 
 def chat_json[T: BaseModel](system: str, user: str, response_model: type[T], model: str = DEFAULT_CHAT_MODEL,
-                            max_tokens: int = 6000, retries: int = 5, temperature: float | None = None) -> T:
+                            max_tokens: int = 6000, retries: int = 5, temperature: float | None = None,
+                            context: dict | None = None) -> T:
     """Ask the model for JSON matching `response_model` and return the validated instance.
 
     API errors back off (rate limits 30s, 60s, ...); invalid replies are retried with the validation
-    errors fed back to the model so it can correct them.
+    errors fed back to the model so it can correct them. `context` is passed to Pydantic validators
+    (e.g. the source CV for fact checks).
     """
     schema = strict_schema(response_model)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -61,7 +63,7 @@ def chat_json[T: BaseModel](system: str, user: str, response_model: type[T], mod
 
         text = message_text(resp.choices[0].message.content)
         try:
-            return response_model.model_validate(parse_json(text))
+            return response_model.model_validate(parse_json(text), context=context)
         except (ValidationError, ValueError) as e:
             last_error = e
             messages = messages[:2] + [

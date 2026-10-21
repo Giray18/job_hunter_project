@@ -60,6 +60,12 @@ variables:
       Minimum fit score for the priority tiers (1 = Croatia, 2 = confirmed remote). Jobs below it compete with
       unclear-remote jobs on fit score in tier 3.
     default: 60
+  availability_note:
+    description: Availability sentence in every cover letter's fixed closing paragraph.
+    default: I am available to start quickly
+  b2b_note:
+    description: B2B sentence in every cover letter's fixed closing paragraph.
+    default: I am also open to B2B cooperation through my own company
   top_n:
     description: Number of best-ranked jobs per run; Milestone 5 tailors one CV for each.
     default: 10
