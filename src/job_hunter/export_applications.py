@@ -15,6 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import NotFound
 
 from job_hunter import html_export, pdf_render
 
@@ -32,19 +33,30 @@ def main():
     args = parser.parse_args()
 
     client = WorkspaceClient(profile=args.profile) if args.profile else WorkspaceClient()
-    remote = pdf_render.day_dir(f"/Volumes/{args.catalog}/{args.schema}/{args.volume}/output", args.date)
-    local = args.dest / args.date.isoformat()
+    try:
+        index, entries, count = export(client, args.catalog, args.schema, args.volume, args.date, args.dest)
+    except FileNotFoundError as e:
+        raise SystemExit(str(e)) from e
+    print(f"Downloaded {count} file(s) to {index.parent}")
+    print(f"{len(entries)} application(s). Open: {index.resolve().as_uri()}")
 
-    count = download_tree(client, remote, local)
+
+def export(client: WorkspaceClient, catalog: str, schema: str, volume: str, day: date,
+           dest: Path) -> tuple[Path, list[html_export.ApplicationEntry], int]:
+    """Download one day's output folder and render the local page; returns (index path, entries, file count)."""
+    remote = pdf_render.day_dir(f"/Volumes/{catalog}/{schema}/{volume}/output", day)
+    local = dest / day.isoformat()
+    try:
+        count = download_tree(client, remote, local)
+    except NotFound as e:
+        raise FileNotFoundError(f"{remote} does not exist; no applications were generated on {day}") from e
     json_path = local / html_export.JSON_FILE
     if not json_path.exists():
-        raise SystemExit(f"No {html_export.JSON_FILE} in {remote}; did tailor_applications run on {args.date}?")
-
-    day, entries = html_export.from_json(json_path.read_text(encoding="utf-8"))
+        raise FileNotFoundError(f"No {html_export.JSON_FILE} in {remote}; did tailor_applications run on {day}?")
+    page_day, entries = html_export.from_json(json_path.read_text(encoding="utf-8"))
     index = local / html_export.INDEX_FILE
-    index.write_text(html_export.render_index(day, entries, local_dir=local), encoding="utf-8")
-    print(f"Downloaded {count} file(s) to {local}")
-    print(f"{len(entries)} application(s). Open: {index.resolve().as_uri()}")
+    index.write_text(html_export.render_index(page_day, entries, local_dir=local), encoding="utf-8")
+    return index, entries, count
 
 
 def download_tree(client: WorkspaceClient, remote_dir: str, local_dir: Path) -> int:
