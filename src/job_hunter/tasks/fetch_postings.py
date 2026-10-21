@@ -17,6 +17,8 @@ def main():
     parser.add_argument("--schema", required=True)
     parser.add_argument("--max-postings", type=int, default=100)
     parser.add_argument("--delay-seconds", type=float, default=2.0)
+    parser.add_argument("--max-apply-type-backfill", type=int, default=20,
+                        help="Older postings per run re-read only to detect their apply type")
     args = parser.parse_args()
 
     from databricks.sdk.runtime import spark
@@ -65,6 +67,47 @@ def main():
     print(f"Fetched {len(postings)} posting(s): {ok} OK, {removed} removed (404), {len(postings) - ok - removed} failed")
     if postings and ok + removed == 0:
         raise RuntimeError("No job posting could be fetched; LinkedIn may be blocking requests")
+
+    rate_limited = any(p.http_status == HTTPStatus.TOO_MANY_REQUESTS for p in postings)
+    if not rate_limited and args.max_apply_type_backfill > 0:
+        backfill_apply_types(spark, args, postings_table, http)
+
+
+def backfill_apply_types(spark, args, postings_table: str, http: requests.Session) -> None:
+    """Postings fetched before apply_type existed: re-read the page and update only apply_type.
+
+    Only that column changes (fetched_at stays), so the job is not re-enriched by the LLM.
+    Jobs with a generated application go first, then judged jobs, then the rest.
+    """
+    matches = storage.full_name(args.catalog, args.schema, Table.GOLD_JOB_MATCHES)
+    applications = storage.full_name(args.catalog, args.schema, Table.GOLD_APPLICATIONS)
+    ids = [
+        r.job_id
+        for r in spark.sql(f"""
+            SELECT p.job_id
+            FROM {postings_table} p
+            LEFT JOIN (SELECT DISTINCT job_id FROM {applications}) a ON a.job_id = p.job_id
+            LEFT JOIN (SELECT DISTINCT job_id FROM {matches}) m ON m.job_id = p.job_id
+            WHERE p.http_status = 200 AND p.apply_type IS NULL
+            ORDER BY a.job_id IS NULL, m.job_id IS NULL, p.fetched_at DESC
+            LIMIT {int(args.max_apply_type_backfill)}
+        """).collect()
+    ]
+    if not ids:
+        return
+    updates = []
+    for job_id in ids:
+        posting = linkedin_jobs.fetch_job_posting(job_id, http)
+        if posting.http_status == HTTPStatus.TOO_MANY_REQUESTS:
+            print("Rate limited by LinkedIn during apply-type backfill; continuing next run")
+            break
+        if posting.ok:
+            updates.append((job_id, posting.apply_type.value))
+        time.sleep(args.delay_seconds)
+    if updates:
+        source = spark.createDataFrame(updates, "job_id STRING, apply_type STRING")
+        storage.update_columns(spark, source, postings_table, keys=["job_id"], columns=["apply_type"])
+    print(f"Backfilled apply_type for {len(updates)} of {len(ids)} older posting(s)")
 
 
 if __name__ == "__main__":

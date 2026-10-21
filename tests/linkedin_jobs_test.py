@@ -1,4 +1,7 @@
+import pytest
+
 from job_hunter import linkedin_jobs
+from job_hunter.records import ApplyType
 
 PAGE = """
 <h2 class="top-card-layout__title font-sans topcard__title">Data Engineer (f/m/x)</h2>
@@ -45,3 +48,25 @@ def test_parse_job_posting_without_description():
     posting = linkedin_jobs.parse_job_posting("<html>login wall</html>")
     assert posting["description"] is None
     assert posting["criteria"] == {}
+    assert posting["apply_type"] is ApplyType.UNKNOWN
+
+
+# Markers as they appear on LinkedIn's public job pages (both buttons are labelled "Apply" when logged out).
+EXTERNAL_BUTTON = """<button class="top-card-layout__cta--primary">
+  <icon data-svg-class-name="apply-button__offsite-apply-icon-svg"></icon> Apply</button>
+<div class="contextual-sign-in-modal" data-impression-id="public_jobs_apply-link-offsite_contextual-sign-in-modal">"""
+EASY_APPLY_BUTTON = """<button class="top-card-layout__cta--primary"
+  data-tracking-control-name="public_jobs_apply-link-onsite"> Apply</button>"""
+
+
+@pytest.mark.parametrize(
+    ("page", "expected"),
+    [
+        (EXTERNAL_BUTTON, ApplyType.EXTERNAL),
+        (EASY_APPLY_BUTTON, ApplyType.EASY_APPLY),
+        ("<html>no apply button</html>", ApplyType.UNKNOWN),
+        (EXTERNAL_BUTTON + EASY_APPLY_BUTTON, ApplyType.UNKNOWN),
+    ],
+)
+def test_detect_apply_type(page, expected):
+    assert linkedin_jobs.detect_apply_type(page) is expected

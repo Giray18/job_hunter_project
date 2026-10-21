@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
+from job_hunter.records import ApplyType
+
 INDEX_FILE = "index.html"
 JSON_FILE = "applications.json"
 
@@ -32,6 +34,34 @@ class ApplicationEntry:
     reasons: str
     matching_skills: list[str]
     missing_skills: list[str]
+    apply_type: str = ApplyType.UNKNOWN.value  # default keeps older applications.json files readable
+
+
+# Step-by-step hint for a browser agent; LinkedIn labels depend on the UI language (English / Turkish).
+APPLY_INSTRUCTIONS = {
+    ApplyType.EXTERNAL: (
+        'Open the apply link and click the "Apply" / "Başvur" button. It opens the company\'s own application site '
+        "(often in a new tab); continue the application there."
+    ),
+    ApplyType.EASY_APPLY: (
+        'Open the apply link and click "Easy Apply" / "Kolay Başvuru". Fill in the LinkedIn form and upload the CV '
+        "when asked."
+    ),
+    ApplyType.UNKNOWN: (
+        'Open the apply link and click the apply button shown ("Apply" / "Başvur" or "Easy Apply" / '
+        '"Kolay Başvuru"), then follow the form.'
+    ),
+}
+STOP_BEFORE_SUBMIT = "Upload the CV and cover letter from the paths above when asked, paste the cover letter text " \
+    "into text fields, and stop before the final submit so the candidate can review."
+
+
+def apply_instructions(apply_type: str) -> str:
+    try:
+        kind = ApplyType(apply_type)
+    except ValueError:
+        kind = ApplyType.UNKNOWN
+    return f"{APPLY_INSTRUCTIONS[kind]} {STOP_BEFORE_SUBMIT}"
 
 
 def relative_to_day(pdf_path: str, day_dir: str) -> str:
@@ -59,7 +89,8 @@ def render_index(day: date, entries: list[ApplicationEntry], local_dir: Path | N
         return str((local_dir / relative).resolve()) if local_dir else relative
 
     records = [
-        {**asdict(e), "cv_path": file_path(e.cv_file), "cover_letter_path": file_path(e.cover_letter_file)}
+        {**asdict(e), "cv_path": file_path(e.cv_file), "cover_letter_path": file_path(e.cover_letter_file),
+         "agent_instructions": apply_instructions(e.apply_type)}
         for e in entries
     ]
     # "</" would end the <script> element early; JSON allows the escaped form.
@@ -117,13 +148,16 @@ cover letter files to upload, and the cover letter text to paste. Review every f
 def _section(e: ApplicationEntry, cv_path: str, letter_path: str) -> str:
     skills_have = ", ".join(e.matching_skills) or "-"
     skills_missing = ", ".join(e.missing_skills) or "-"
+    apply_label = {"external": "company site", "easy_apply": "Easy Apply"}.get(e.apply_type, "apply type unknown")
     return f"""<section class="application" id="job-{_e(e.job_id)}" data-rank="{e.rank}" data-job-id="{_e(e.job_id)}"
-  data-apply-url="{_e(e.apply_url)}" data-cv-path="{_e(cv_path)}" data-cover-letter-path="{_e(letter_path)}">
+  data-apply-url="{_e(e.apply_url)}" data-apply-type="{_e(e.apply_type)}" data-cv-path="{_e(cv_path)}"
+  data-cover-letter-path="{_e(letter_path)}">
   <h2>#{e.rank} {_e(e.title)} | {_e(e.company or "")}</h2>
   <div class="meta"><span class="badge">tier {e.tier}</span><span class="badge">fit {e.fit_score}</span>
-    {_e(e.location or "location not stated")}</div>
+    <span class="badge">{_e(apply_label)}</span>{_e(e.location or "location not stated")}</div>
   <dl>
     <dt>Apply link</dt><dd><a class="apply-link" href="{_e(e.apply_url)}" target="_blank" rel="noopener">{_e(e.apply_url)}</a></dd>
+    <dt>Apply steps</dt><dd class="agent-instructions">{_e(apply_instructions(e.apply_type))}</dd>
     <dt>CV (PDF)</dt><dd><a class="cv-file" href="{_e(e.cv_file)}">{_e(e.cv_file)}</a><br><code class="cv-path">{_e(cv_path)}</code></dd>
     <dt>Cover letter (PDF)</dt><dd><a class="cover-letter-file" href="{_e(e.cover_letter_file)}">{_e(e.cover_letter_file)}</a><br><code class="cover-letter-path">{_e(letter_path)}</code></dd>
     <dt>Why it matches</dt><dd>{_e(e.reasons)}</dd>

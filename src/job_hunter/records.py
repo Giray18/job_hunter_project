@@ -49,6 +49,14 @@ class RemoteEligibility(StrEnum):
     UNCLEAR = "unclear"
 
 
+class ApplyType(StrEnum):
+    """How a LinkedIn job is applied to (detected from the public job page)."""
+
+    EXTERNAL = "external"  # "Apply / Başvur" → company's own application site (URL only shown when logged in)
+    EASY_APPLY = "easy_apply"  # "Easy Apply / Kolay Başvuru" → form inside LinkedIn
+    UNKNOWN = "unknown"
+
+
 # Fetch outcomes that are final: the posting was read, or LinkedIn removed it.
 FINAL_HTTP_STATUSES = (HTTPStatus.OK, HTTPStatus.NOT_FOUND)
 
@@ -90,6 +98,7 @@ class JobPosting:
     location: str | None
     description: str | None
     criteria: dict[str, str] | None
+    apply_type: ApplyType
     http_status: int
     fetched_at: datetime
 

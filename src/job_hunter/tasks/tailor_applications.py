@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from job_hunter import html_export, llm, matching, pdf_render, ranking, storage, tailoring
 from job_hunter.cv import CvDocument
-from job_hunter.records import Application
+from job_hunter.records import Application, ApplyType
 from job_hunter.storage import Table
 
 
@@ -87,10 +87,11 @@ def _write_day_page(spark, name, output_dir: str, day) -> None:
         f"""
         SELECT a.job_id, a.rank_position, a.tier, a.fit_score, a.cv_pdf_path, a.cover_letter_pdf_path,
                a.cover_letter_text, e.title_en, e.company, e.url, s.city, s.country,
-               m.reasons, m.matching_skills, m.missing_skills
+               m.reasons, m.matching_skills, m.missing_skills, p.apply_type
         FROM {name(Table.GOLD_APPLICATIONS)} a
         JOIN {name(Table.SILVER_JOB_EMBEDDINGS)} e ON e.job_id = a.job_id
         JOIN {name(Table.SILVER_JOBS)} s ON s.job_id = a.job_id
+        LEFT JOIN {name(Table.POSTINGS)} p ON p.job_id = a.job_id
         LEFT JOIN {name(Table.GOLD_JOB_MATCHES)} m ON m.job_id = a.job_id AND m.cv_version = a.cv_version
         WHERE startswith(a.cv_pdf_path, :prefix)
         ORDER BY a.rank_position, a.created_at
@@ -116,6 +117,7 @@ def _write_day_page(spark, name, output_dir: str, day) -> None:
             reasons=r.reasons or "",
             matching_skills=list(r.matching_skills or []),
             missing_skills=list(r.missing_skills or []),
+            apply_type=r.apply_type or ApplyType.UNKNOWN.value,
         )
         for r in rows
     ]

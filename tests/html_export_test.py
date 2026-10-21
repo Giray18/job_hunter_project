@@ -76,6 +76,29 @@ def test_local_render_uses_absolute_paths(tmp_path: Path):
     assert 'href="01_OIV_Data_Engineer_4476677082/cv.pdf"' in page
 
 
+@pytest.mark.parametrize(
+    ("apply_type", "phrase"),
+    [("external", '"Başvur"'), ("easy_apply", '"Kolay Başvuru"'), ("unknown", "apply button shown"),
+     ("something-new", "apply button shown")],
+)
+def test_apply_type_attribute_and_instructions(apply_type, phrase):
+    page = html_export.render_index(DAY, [_entry(apply_type=apply_type)])
+    parser = _Sections()
+    parser.feed(page)
+    assert parser.sections[0]["data-apply-type"] == apply_type
+    instructions = _embedded(page)["applications"][0]["agent_instructions"]
+    assert phrase in instructions
+    assert "stop before the final submit" in instructions
+
+
+def test_older_json_without_apply_type_still_loads():
+    entry = _entry()
+    data = json.loads(html_export.to_json(DAY, [entry]))
+    del data["applications"][0]["apply_type"]
+    _, entries = html_export.from_json(json.dumps(data))
+    assert entries[0].apply_type == "unknown"
+
+
 def test_json_round_trip():
     entries = [_entry(), _entry(rank=2, job_id="2", company=None, location=None)]
     assert html_export.from_json(html_export.to_json(DAY, entries)) == (DAY, entries)

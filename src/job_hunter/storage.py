@@ -41,6 +41,7 @@ POSTINGS_SCHEMA = """
     location STRING,
     description STRING,
     criteria MAP<STRING, STRING>,
+    apply_type STRING,
     http_status INT,
     fetched_at TIMESTAMP
 """
