@@ -2,32 +2,55 @@
 
 from datetime import datetime
 
-SENIORITY = ["intern", "junior", "mid", "senior", "lead", "principal", "unknown"]
-WORK_MODES = ["remote", "hybrid", "onsite", "unknown"]
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "language": {"type": "string", "description": "ISO 639-1 code of the original description, e.g. en, nl, de"},
-        "title_en": {"type": "string"},
-        "description_en": {"type": "string"},
-        "summary": {"type": "string"},
-        "skills": {"type": "array", "items": {"type": "string"}},
-        "seniority": {"type": "string", "enum": SENIORITY},
-        "work_mode": {"type": "string", "enum": WORK_MODES},
-        "country": {"type": ["string", "null"]},
-        "city": {"type": ["string", "null"]},
-        "min_years_experience": {"type": ["integer", "null"]},
-    },
-    "required": [
-        "language", "title_en", "description_en", "summary", "skills", "seniority", "work_mode",
-        "country", "city", "min_years_experience",
-    ],
-    "additionalProperties": False,
-}
+from job_hunter import countries
+from job_hunter.records import JobPosting, Seniority, SilverJob, WorkMode
+
+MAX_SKILLS = 25
+
+
+class EnrichedJob(BaseModel):
+    """LLM output for one posting; validated before anything is stored."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: str = Field(pattern=r"^[a-z]{2}$", description="ISO 639-1 code of the original description, e.g. en")
+    title_en: str = Field(min_length=1)
+    description_en: str = Field(description="English translation, or empty string if already English")
+    summary: str = Field(min_length=1)
+    skills: list[str] = Field(max_length=MAX_SKILLS)
+    seniority: Seniority
+    work_mode: WorkMode
+    country_code: str | None = Field(pattern=r"^[A-Z]{2}$", description="ISO 3166-1 alpha-2 code, e.g. HR")
+    city: str | None
+    min_years_experience: int | None = Field(ge=0, le=50)
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _lower_language(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("skills", mode="before")
+    @classmethod
+    def _dedupe_skills(cls, v):
+        cleaned = [s.strip() for s in v or [] if isinstance(s, str) and s.strip()]
+        return list(dict.fromkeys(cleaned))[:MAX_SKILLS]
+
+    @field_validator("country_code", mode="before")
+    @classmethod
+    def _iso_country(cls, v):
+        return countries.normalize_code(v) if isinstance(v, str) and v.strip() else None
+
+    @field_validator("city", mode="before")
+    @classmethod
+    def _blank_city(cls, v):
+        return v.strip() or None if isinstance(v, str) else v
+
 
 SYSTEM_PROMPT = """You normalize job postings for a job-matching system.
 Rules:
+- language: ISO 639-1 code of the description's language.
 - description_en: if the description is already in English, return an empty string "".
   Otherwise a faithful, complete English translation; keep paragraphs and bullet points; do not summarize,
   add or omit requirements.
@@ -37,48 +60,40 @@ Rules:
   deduplicated, in English, at most 25.
 - seniority: infer from title, criteria and required experience.
 - work_mode: "remote" / "hybrid" / "onsite" only if the posting says so; otherwise "unknown".
-- country and city: from the location, or from the description if the location lacks them; in English
-  (e.g. "Austria", "Vienna"); null if not stated anywhere.
+- country_code: ISO 3166-1 alpha-2 code of the job's country (e.g. "HR" for Croatia, "GB" for the United Kingdom),
+  from the location, or from the description if the location lacks it; null if not stated anywhere.
+- city: in English (e.g. "Vienna"), from the location or description; null if not stated.
 - min_years_experience: minimum years required if stated, else null.
 Use only information in the posting. Never invent facts."""
 
 
-def user_prompt(posting: dict) -> str:
-    criteria = "\n".join(f"- {k}: {v}" for k, v in (posting.get("criteria") or {}).items())
+def user_prompt(posting: JobPosting) -> str:
+    criteria = "\n".join(f"- {k}: {v}" for k, v in (posting.criteria or {}).items())
     return (
-        f"Title: {posting.get('title')}\n"
-        f"Company: {posting.get('company')}\n"
-        f"Location: {posting.get('location')}\n"
+        f"Title: {posting.title}\n"
+        f"Company: {posting.company}\n"
+        f"Location: {posting.location}\n"
         f"Criteria:\n{criteria or '- none'}\n\n"
-        f"Description:\n{posting.get('description')}"
+        f"Description:\n{posting.description}"
     )
 
 
-def enriched_row(job_id: str, result: dict, original_description: str, model: str, source_fetched_at: datetime,
-                 enriched_at: datetime) -> tuple:
-    """LLM result → row in SILVER_JOBS_SCHEMA column order, with enums and lists sanitized.
-
-    English postings come back with an empty description_en (saves output tokens); keep the original then.
-    """
-    skills = list(dict.fromkeys(s.strip() for s in result.get("skills") or [] if s and s.strip()))[:25]
-    return (
-        job_id,
-        (result.get("language") or "").lower()[:5] or None,
-        result.get("title_en"),
-        (result.get("description_en") or "").strip() or original_description,
-        result.get("summary"),
-        skills,
-        _enum(result.get("seniority"), SENIORITY),
-        _enum(result.get("work_mode"), WORK_MODES),
-        result.get("country") or None,
-        result.get("city") or None,
-        result.get("min_years_experience"),
-        model,
-        source_fetched_at,
-        enriched_at,
+def to_silver_job(posting: JobPosting, result: EnrichedJob, model: str, enriched_at: datetime) -> SilverJob:
+    """English postings come back with an empty description_en (saves output tokens); keep the original then."""
+    return SilverJob(
+        job_id=posting.job_id,
+        language=result.language,
+        title_en=result.title_en,
+        description_en=result.description_en.strip() or (posting.description or ""),
+        summary=result.summary,
+        skills=result.skills,
+        seniority=result.seniority,
+        work_mode=result.work_mode,
+        country=countries.name(result.country_code) if result.country_code else None,
+        country_code=result.country_code,
+        city=result.city,
+        min_years_experience=result.min_years_experience,
+        model=model,
+        source_fetched_at=posting.fetched_at,
+        enriched_at=enriched_at,
     )
-
-
-def _enum(value, allowed: list[str]) -> str:
-    value = (value or "").strip().lower()
-    return value if value in allowed else "unknown"

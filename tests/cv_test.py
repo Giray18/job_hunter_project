@@ -1,31 +1,73 @@
 import json
 from datetime import UTC, datetime
 
-from job_hunter import cv
+import pytest
+from pydantic import ValidationError
+
+from job_hunter import cv, llm
 
 NOW = datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
 
-CV = {
+
+def _job(company: str, role: str, bullets: list[str] | None = None) -> dict:
+    return {"company": company, "role": role, "employment_type": None, "start": "2020", "end": "2021",
+            "bullets": bullets or ["Did things"]}
+
+
+DOC = {
     "name": "Jane Doe",
     "headline": "Data & AI Engineer",
     "summary": "I build data platforms.",
     "location": "Zagreb, Croatia",
+    "work_authorization": None,
+    "email": None,
+    "phone": None,
+    "links": [],
     "experience": [
-        {"company": "A", "role": "Data Engineer", "start": "2024", "end": "Ongoing", "bullets": []},
-        {"company": "B", "role": "Analytics Engineer", "start": "2023", "end": "2024", "bullets": []},
-        {"company": "C", "role": "Data Engineer", "start": "2022", "end": "2023", "bullets": []},
-        {"company": "D", "role": "BI Analyst", "start": "2019", "end": "2022", "bullets": []},
+        _job("A", "Data Engineer", ["• Built a RAG app", "  - Tuned Delta  ", "•"]),
+        _job("B", "Analytics Engineer"),
+        _job("C", "Data Engineer"),
+        _job("D", "BI Analyst"),
     ],
     "skills": [{"category": "AI", "items": ["RAG", "LLMs"]}, {"category": "Platforms", "items": ["Databricks"]}],
+    "certifications": [],
+    "education": [],
+    "languages": [],
+    "trainings": [],
+    "projects": [],
 }
 
 
+def test_bullets_are_cleaned():
+    document = cv.CvDocument.model_validate(DOC)
+    assert document.experience[0].bullets == ["Built a RAG app", "Tuned Delta"]
+
+
+def test_roles_without_bullets():
+    document = cv.CvDocument.model_validate({**DOC, "experience": [_job("A", "DE"), {**_job("B", "DA"), "bullets": []}]})
+    assert document.roles_without_bullets() == ["DA at B"]
+
+
 def test_match_text_uses_recent_roles_and_all_skills():
-    text = cv.match_text(CV)
+    text = cv.CvDocument.model_validate(DOC).match_text()
     assert text.startswith("Data & AI Engineer | Zagreb, Croatia")
     assert "Recent roles: Data Engineer at A; Analytics Engineer at B; Data Engineer at C" in text
     assert "BI Analyst" not in text
     assert "Skills: RAG, LLMs, Databricks" in text
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"experience": []},
+        {"experience": [{**_job("A", "DE"), "start": ""}]},
+        {"name": ""},
+        {"unexpected": "field"},
+    ],
+)
+def test_invalid_documents_are_rejected(broken):
+    with pytest.raises(ValidationError):
+        cv.CvDocument.model_validate({**DOC, **broken})
 
 
 def test_file_version_is_stable_content_hash():
@@ -34,29 +76,18 @@ def test_file_version_is_stable_content_hash():
     assert len(cv.file_version(b"pdf")) == 16
 
 
-def test_cv_row_serializes_json_and_marks_current():
-    row = cv.cv_row("v1", "/Volumes/x/cv.pdf", "text", CV, [0.1, 0.2], "llm", "emb", NOW)
-    assert row[0] == "v1"
-    assert json.loads(row[3])["name"] == "Jane Doe"
-    assert row[4] == cv.match_text(CV)
-    assert row[5] == [0.1, 0.2]
-    assert row[-1] is True
+def test_to_cv_version_serializes_document():
+    document = cv.CvDocument.model_validate(DOC)
+    record = cv.to_cv_version("v1", "/Volumes/x/cv.pdf", "text", document, [0.1, 0.2], "llm", "emb", NOW)
+    assert json.loads(record.cv_json)["name"] == "Jane Doe"
+    assert record.match_text == document.match_text()
+    assert record.is_current is True
 
 
-def test_normalize_strips_bullet_symbols_and_flags_empty_roles():
-    data = {
-        "experience": [
-            {"role": "DE", "company": "A", "bullets": ["• Built a RAG app", "  - Tuned Delta  ", "•"]},
-            {"role": "DA", "company": "B", "bullets": []},
-        ]
-    }
-    cv.normalize(data)
-    assert data["experience"][0]["bullets"] == ["Built a RAG app", "Tuned Delta"]
-    assert cv.roles_without_bullets(data) == ["DA at B"]
-
-
-def test_schema_is_strict():
-    """Strict JSON-schema mode needs every property required and no extra properties, at every level."""
+def test_strict_schema_inlines_nested_models():
+    """Strict mode needs every property required and no extra properties, at every level, with no $refs."""
+    schema = llm.strict_schema(cv.CvDocument)
+    assert "$ref" not in str(schema) and "$defs" not in str(schema)
 
     def check(node):
         if node.get("type") == "object":
@@ -67,4 +98,5 @@ def test_schema_is_strict():
         if node.get("type") == "array":
             check(node["items"])
 
-    check(cv.SCHEMA)
+    check(schema)
+    assert schema["properties"]["experience"]["items"]["properties"]["company"]["type"] == "string"

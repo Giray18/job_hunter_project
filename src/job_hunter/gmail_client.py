@@ -10,6 +10,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from job_hunter.records import AlertEmail, JobCard
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 LINKEDIN_JOB_ALERTS_QUERY = "from:jobalerts-noreply@linkedin.com"
 
@@ -78,22 +80,21 @@ def list_message_ids(service, query: str, max_results: int = 10) -> list[str]:
     return ids
 
 
-def get_message(service, message_id: str) -> dict:
-    """Fetch one message and flatten it into the fields we care about."""
+def get_message(service, message_id: str) -> AlertEmail:
+    """Fetch one message and flatten it into the fields we store (URL query strings stripped)."""
     msg = service.users().messages().get(userId="me", id=message_id, format="full").execute()
     headers = {h["name"].lower(): h["value"] for h in msg["payload"].get("headers", [])}
     text = strip_url_queries(extract_text(msg["payload"]))
-    return {
-        "id": msg["id"],
-        "thread_id": msg["threadId"],
-        "date": parsedate_to_datetime(headers["date"]) if "date" in headers else None,
-        "from": headers.get("from"),
-        "subject": headers.get("subject"),
-        "snippet": clean_snippet(msg.get("snippet", "")),
-        "text": text,
-        "job_links": extract_job_links(text + " " + _html_body(msg["payload"])),
-        "job_cards": extract_job_cards(text),
-    }
+    return AlertEmail(
+        message_id=msg["id"],
+        thread_id=msg["threadId"],
+        received_at=parsedate_to_datetime(headers["date"]) if "date" in headers else None,
+        sender=headers.get("from"),
+        subject=headers.get("subject"),
+        snippet=clean_snippet(msg.get("snippet", "")),
+        text=text,
+        job_cards=extract_job_cards(text),
+    )
 
 
 def extract_text(payload: dict) -> str:
@@ -110,7 +111,7 @@ def extract_job_links(text: str) -> list[str]:
     return [_job_url(job_id) for job_id in job_ids]
 
 
-def extract_job_cards(text: str) -> list[dict]:
+def extract_job_cards(text: str) -> list[JobCard]:
     """Parse the job digest into one record per job: title, company, location and canonical URL.
 
     Each card in the plain-text email is the job title, company and location on separate lines,
@@ -126,13 +127,8 @@ def extract_job_cards(text: str) -> list[dict]:
         lines = [line.strip() for line in before_link[:-1] if line.strip() and "http" not in line]
         title, company, location = (lines + [None, None, None])[:3]
         cards.append(
-            {
-                "job_id": match.group(1),
-                "url": _job_url(match.group(1)),
-                "title": title,
-                "company": company,
-                "location": location,
-            }
+            JobCard(job_id=match.group(1), url=_job_url(match.group(1)), title=title, company=company,
+                    location=location)
         )
     return cards
 

@@ -8,8 +8,11 @@ import html
 import re
 import time
 from datetime import UTC, datetime
+from http import HTTPStatus
 
 import requests
+
+from job_hunter.records import JobPosting
 
 GUEST_POSTING_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
 _HEADERS = {
@@ -31,25 +34,28 @@ _COMPANY_RE = re.compile(r'<a class="topcard__org-name-link[^"]*"[^>]*>(.*?)</a>
 _LOCATION_RE = re.compile(r'<span class="topcard__flavor topcard__flavor--bullet">(.*?)</span>', re.DOTALL)
 
 
-def fetch_job_posting(job_id: str, session: requests.Session | None = None, retries: int = 3) -> dict:
+def fetch_job_posting(job_id: str, session: requests.Session | None = None, retries: int = 3) -> JobPosting:
     """Download and parse one job posting. Retries with backoff when LinkedIn rate-limits (429)."""
     http = session or requests.Session()
     url = GUEST_POSTING_URL.format(job_id=job_id)
     for attempt in range(retries):
         resp = http.get(url, headers=_HEADERS, timeout=30)
-        if resp.status_code != 429:
+        if resp.status_code != HTTPStatus.TOO_MANY_REQUESTS:
             break
         time.sleep(5 * 2**attempt)
 
-    record = {
-        "job_id": job_id,
-        "url": f"https://www.linkedin.com/jobs/view/{job_id}/",
-        "http_status": resp.status_code,
-        "fetched_at": datetime.now(UTC),
-    }
-    if resp.status_code == 200:
-        record.update(parse_job_posting(resp.text))
-    return record
+    parsed = parse_job_posting(resp.text) if resp.status_code == HTTPStatus.OK else {}
+    return JobPosting(
+        job_id=job_id,
+        url=f"https://www.linkedin.com/jobs/view/{job_id}/",
+        title=parsed.get("title"),
+        company=parsed.get("company"),
+        location=parsed.get("location"),
+        description=parsed.get("description"),
+        criteria=parsed.get("criteria"),
+        http_status=resp.status_code,
+        fetched_at=datetime.now(UTC),
+    )
 
 
 def parse_job_posting(page: str) -> dict:

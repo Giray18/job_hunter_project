@@ -1,9 +1,10 @@
-"""Job task: CV PDF in a UC volume → structured JSON + embedding → silver_cv."""
+"""Job task: CV PDF in a UC volume → validated CvDocument + embedding → silver_cv."""
 
 import argparse
 from datetime import UTC, datetime
 
 from job_hunter import cv, llm, storage
+from job_hunter.storage import Table
 
 
 def main():
@@ -19,7 +20,7 @@ def main():
     from databricks.sdk.runtime import spark
 
     storage.ensure_tables(spark, args.catalog, args.schema)
-    table = storage.full_name(args.catalog, args.schema, storage.SILVER_CV_TABLE)
+    table = storage.full_name(args.catalog, args.schema, Table.SILVER_CV)
 
     with open(args.cv_path, "rb") as f:
         pdf_bytes = f.read()
@@ -32,16 +33,16 @@ def main():
     text = cv.extract_text(pdf_bytes)
     print(f"Extracted {len(text)} characters from {args.cv_path} (version {version})")
 
-    structured = cv.normalize(llm.chat_json(cv.SYSTEM_PROMPT, text, cv.SCHEMA, model=args.model, max_tokens=16000))
-    print(f"Structured CV: {len(structured['experience'])} roles, {len(structured['certifications'])} certifications")
-    if missing := cv.roles_without_bullets(structured):
+    document = llm.chat_json(cv.SYSTEM_PROMPT, text, cv.CvDocument, model=args.model, max_tokens=16000)
+    print(f"Structured CV: {len(document.experience)} roles, {len(document.certifications)} certifications")
+    if missing := document.roles_without_bullets():
         print(f"WARNING: roles without bullet points (check the PDF layout): {missing}")
 
-    [embedding] = llm.embed([cv.match_text(structured)], model=args.embedding_model)
-    row = cv.cv_row(version, args.cv_path, text, structured, embedding, args.model, args.embedding_model,
-                    datetime.now(UTC))
+    [embedding] = llm.embed([document.match_text()], model=args.embedding_model)
+    record = cv.to_cv_version(version, args.cv_path, text, document, embedding, args.model, args.embedding_model,
+                              datetime.now(UTC))
 
-    storage.merge(spark, spark.createDataFrame([row], storage.SILVER_CV_SCHEMA), table, ["cv_version"],
+    storage.merge(spark, storage.to_dataframe(spark, Table.SILVER_CV, [record]), table, ["cv_version"],
                   update_when="true")
     # Only one CV version is current; matching always uses it.
     spark.sql(f"UPDATE {table} SET is_current = false WHERE is_current AND cv_version <> '{version}'")
