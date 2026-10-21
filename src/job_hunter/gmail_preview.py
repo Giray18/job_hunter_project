@@ -13,6 +13,7 @@ from pathlib import Path
 import requests
 
 from job_hunter import gmail_client, linkedin_jobs
+from job_hunter.records import JobPosting
 
 SECRETS_DIR = Path(".secrets")
 
@@ -37,32 +38,32 @@ def main():
     print(f"{len(ids)} message(s) for query: {args.query}\n")
 
     for message_id in ids:
-        msg = gmail_client.get_message(service, message_id)
+        email = gmail_client.get_message(service, message_id)
         print("=" * 100)
-        print(f"Date:    {msg['date']}")
-        print(f"From:    {msg['from']}")
-        print(f"Subject: {msg['subject']}")
-        print(f"Snippet: {msg['snippet']}")
-        print(f"Jobs ({len(msg['job_cards'])}):")
-        for card in msg["job_cards"]:
-            print(f"  - {card['title']} | {card['company']} | {card['location']}")
-            print(f"    {card['url']}")
+        print(f"Date:    {email.received_at}")
+        print(f"From:    {email.sender}")
+        print(f"Subject: {email.subject}")
+        print(f"Snippet: {email.snippet}")
+        print(f"Jobs ({len(email.job_cards)}):")
+        for card in email.job_cards:
+            print(f"  - {card.title} | {card.company} | {card.location}")
+            print(f"    {card.url}")
             if args.descriptions:
-                _print_description(linkedin_jobs.fetch_job_posting(card["job_id"], http), args.chars)
+                _print_description(linkedin_jobs.fetch_job_posting(card.job_id, http), args.chars)
                 time.sleep(2)  # stay polite to LinkedIn's public endpoint
         if args.body:
             print("-" * 100)
-            print(msg["text"])
+            print(email.text)
         print()
 
 
-def _print_description(posting: dict, chars: int):
-    if posting["http_status"] != 200 or not posting.get("description"):
-        print(f"    [no description, HTTP {posting['http_status']}]")
+def _print_description(posting: JobPosting, chars: int):
+    if not posting.ok or not posting.description:
+        print(f"    [no description, HTTP {posting.http_status}]")
         return
-    for key, value in posting["criteria"].items():
+    for key, value in (posting.criteria or {}).items():
         print(f"    {key}: {value}")
-    text = posting["description"] if chars == 0 else posting["description"][:chars] + "…"
+    text = posting.description if chars == 0 else posting.description[:chars] + "…"
     print("    " + text.replace("\n", "\n    "))
     print()
 
