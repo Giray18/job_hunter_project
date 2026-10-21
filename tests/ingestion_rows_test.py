@@ -46,9 +46,9 @@ def test_to_row_flattens_nested_cards():
 def test_to_row_failed_posting_has_nulls():
     posting = JobPosting(
         job_id="1", url="u", title=None, company=None, location=None, description=None, criteria=None,
-        apply_type=ApplyType.UNKNOWN, http_status=404, fetched_at=NOW,
+        apply_type=ApplyType.UNKNOWN, apply_checked_at=None, http_status=404, fetched_at=NOW,
     )
-    assert to_row(posting) == ("1", "u", None, None, None, None, None, "unknown", 404, NOW)
+    assert to_row(posting) == ("1", "u", None, None, None, None, None, "unknown", None, 404, NOW)
     assert not posting.ok
 
 

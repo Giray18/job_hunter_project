@@ -38,13 +38,15 @@ def top_jobs(jobs: list[RankedJob], priority_min_fit: int, n: int = 10) -> list[
     return rank(jobs, priority_min_fit)[:n]
 
 
-def judged_jobs_sql(embeddings: str, matches: str) -> str:
-    """Latest judgement per job seen within the age window (any CV version)."""
+def judged_jobs_sql(embeddings: str, matches: str, statuses: str) -> str:
+    """Latest judgement per job seen within the age window (any CV version), excluding jobs that already have a
+    status (applied, skipped, closed, not eligible)."""
     return f"""
         SELECT m.job_id, e.title_en, e.company, e.country_code, e.url, m.priority, m.fit_score, m.similarity,
                m.reasons
         FROM {matches} m
         JOIN {embeddings} e ON e.job_id = m.job_id
+        LEFT ANTI JOIN {statuses} st ON st.job_id = m.job_id
         WHERE e.first_seen_at >= :min_first_seen
         QUALIFY row_number() OVER (PARTITION BY m.job_id ORDER BY m.judged_at DESC) = 1
     """

@@ -41,7 +41,8 @@ def main():
     config = matching.MatchConfig(max_age_days=args.max_age_days, priority_min_fit=args.priority_min_fit)
     ranked = [
         ranking.from_row(r.asDict())
-        for r in spark.sql(ranking.judged_jobs_sql(name(Table.SILVER_JOB_EMBEDDINGS), name(Table.GOLD_JOB_MATCHES)),
+        for r in spark.sql(ranking.judged_jobs_sql(name(Table.SILVER_JOB_EMBEDDINGS), name(Table.GOLD_JOB_MATCHES),
+                                                   name(Table.GOLD_APPLICATION_STATUS)),
                            args={"min_first_seen": config.min_first_seen(now)}).collect()
     ]
     top = ranking.top_jobs(ranked, args.priority_min_fit, args.top_n)

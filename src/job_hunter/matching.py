@@ -101,8 +101,10 @@ def filter_params(config: MatchConfig, now: datetime) -> dict:
     }
 
 
-def shortlist_sql(embeddings: str, silver_jobs: str, silver_cv: str, matches: str, max_judge: int) -> str:
-    """Unjudged candidates for the current CV, target country first, then by cosine similarity."""
+def shortlist_sql(embeddings: str, silver_jobs: str, silver_cv: str, matches: str, statuses: str,
+                  max_judge: int) -> str:
+    """Unjudged candidates for the current CV without a status (closed, applied, ...), target country first,
+    then by cosine similarity."""
     if not isinstance(max_judge, int) or max_judge <= 0:
         raise ValueError("max_judge must be a positive int")
     return f"""
@@ -114,6 +116,7 @@ def shortlist_sql(embeddings: str, silver_jobs: str, silver_cv: str, matches: st
         CROSS JOIN (SELECT embedding FROM {silver_cv} WHERE cv_version = :cv_version) cv
         WHERE {candidate_filter_sql("e")}
           AND NOT EXISTS (SELECT 1 FROM {matches} m WHERE m.job_id = e.job_id AND m.cv_version = :cv_version)
+          AND NOT EXISTS (SELECT 1 FROM {statuses} st WHERE st.job_id = e.job_id)
         ORDER BY COALESCE(e.country_code = :target_country, false) DESC, similarity DESC
         LIMIT {max_judge}
     """

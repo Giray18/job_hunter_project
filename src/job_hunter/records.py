@@ -54,7 +54,28 @@ class ApplyType(StrEnum):
 
     EXTERNAL = "external"  # "Apply / Başvur" → company's own application site (URL only shown when logged in)
     EASY_APPLY = "easy_apply"  # "Easy Apply / Kolay Başvuru" → form inside LinkedIn
+    CLOSED = "closed"  # no apply button: LinkedIn no longer accepts applications
     UNKNOWN = "unknown"
+
+
+class StatusValue(StrEnum):
+    """Outcome of a job for the candidate; any status removes the job from future rankings."""
+
+    APPLIED = "applied"
+    SKIPPED = "skipped"  # the candidate decided not to apply
+    CLOSED = "closed"  # no longer accepting applications
+    NOT_ELIGIBLE = "not_eligible"  # excluded by the candidate's rules, e.g. onsite abroad
+
+
+@dataclass(frozen=True)
+class ApplicationStatus:
+    """Row of gold_application_status."""
+
+    job_id: str
+    status: StatusValue
+    source: str  # "pipeline", "browser" or "manual"
+    notes: str | None
+    updated_at: datetime
 
 
 # Fetch outcomes that are final: the posting was read, or LinkedIn removed it.
@@ -99,6 +120,7 @@ class JobPosting:
     description: str | None
     criteria: dict[str, str] | None
     apply_type: ApplyType
+    apply_checked_at: datetime | None
     http_status: int
     fetched_at: datetime
 

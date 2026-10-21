@@ -47,7 +47,8 @@ def main():
     now = datetime.now(UTC)
     params = {**matching.filter_params(config, now), "cv_version": cv_row.cv_version}
     query = matching.shortlist_sql(name(Table.SILVER_JOB_EMBEDDINGS), name(Table.SILVER_JOBS),
-                                   name(Table.SILVER_CV), matches_table, config.max_judge)
+                                   name(Table.SILVER_CV), matches_table,
+                                   name(Table.GOLD_APPLICATION_STATUS), config.max_judge)
     shortlist = [r.asDict() for r in spark.sql(query, args=params).collect()]
     in_target = sum(1 for j in shortlist if j["country_code"] == config.target_country)
     print(f"Shortlisted {len(shortlist)} job(s) for CV {cv_row.cv_version} ({in_target} in {config.target_country})")
@@ -86,7 +87,8 @@ def main():
 
     ranked = [
         ranking.from_row(r.asDict())
-        for r in spark.sql(ranking.judged_jobs_sql(name(Table.SILVER_JOB_EMBEDDINGS), matches_table),
+        for r in spark.sql(ranking.judged_jobs_sql(name(Table.SILVER_JOB_EMBEDDINGS), matches_table,
+                                                   name(Table.GOLD_APPLICATION_STATUS)),
                            args={"min_first_seen": config.min_first_seen(now)}).collect()
     ]
     top = ranking.top_jobs(ranked, config.priority_min_fit, args.top_n)

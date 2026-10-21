@@ -45,6 +45,7 @@ def fetch_job_posting(job_id: str, session: requests.Session | None = None, retr
         time.sleep(5 * 2**attempt)
 
     parsed = parse_job_posting(resp.text) if resp.status_code == HTTPStatus.OK else {}
+    now = datetime.now(UTC)
     return JobPosting(
         job_id=job_id,
         url=f"https://www.linkedin.com/jobs/view/{job_id}/",
@@ -54,8 +55,9 @@ def fetch_job_posting(job_id: str, session: requests.Session | None = None, retr
         description=parsed.get("description"),
         criteria=parsed.get("criteria"),
         apply_type=parsed.get("apply_type", ApplyType.UNKNOWN),
+        apply_checked_at=now if parsed else None,
         http_status=resp.status_code,
-        fetched_at=datetime.now(UTC),
+        fetched_at=now,
     )
 
 
@@ -74,13 +76,16 @@ def parse_job_posting(page: str) -> dict:
 
 def detect_apply_type(page: str) -> ApplyType:
     """The apply button's tracking name: '...apply-link-offsite' sends to the company site (external),
-    '...apply-link-onsite' is LinkedIn Easy Apply. Logged-out pages label both buttons "Apply"."""
+    '...apply-link-onsite' is LinkedIn Easy Apply. Logged-out pages label both buttons "Apply".
+    A job page without any apply button no longer accepts applications."""
     offsite = "apply-link-offsite" in page or "offsite-apply" in page
     onsite = "apply-link-onsite" in page
     if offsite and not onsite:
         return ApplyType.EXTERNAL
     if onsite and not offsite:
         return ApplyType.EASY_APPLY
+    if not offsite and not onsite and "top-card-layout" in page:
+        return ApplyType.CLOSED
     return ApplyType.UNKNOWN
 
 
