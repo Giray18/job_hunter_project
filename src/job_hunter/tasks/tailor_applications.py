@@ -5,7 +5,7 @@ import argparse
 import os
 from datetime import UTC, datetime
 
-from job_hunter import llm, matching, pdf_render, ranking, storage, tailoring
+from job_hunter import html_export, llm, matching, pdf_render, ranking, storage, tailoring
 from job_hunter.cv import CvDocument
 from job_hunter.records import Application
 from job_hunter.storage import Table
@@ -53,6 +53,7 @@ def main():
     todo = [(position, job) for position, job in enumerate(top, 1) if job.job_id not in done]
     print(f"Top {len(top)} job(s); {len(todo)} need a tailored CV and cover letter")
     if not todo:
+        _write_day_page(spark, name, args.output_dir, datetime.now(UTC).date())
         return
 
     details = _job_details(spark, name, [job.job_id for _, job in todo], cv_row.cv_version)
@@ -73,8 +74,56 @@ def main():
         print(f"#{position} {ranked_job.title_en} | {ranked_job.company} -> {os.path.dirname(application.cv_pdf_path)}")
 
     print(f"Created {created} of {len(todo)} application(s) in {applications_table}")
-    if created == 0:
+    if created:
+        _write_day_page(spark, name, args.output_dir, datetime.now(UTC).date())
+    else:
         raise RuntimeError("No application could be created; see the errors above")
+
+
+def _write_day_page(spark, name, output_dir: str, day) -> None:
+    """index.html + applications.json for every application in today's output folder."""
+    day_dir = pdf_render.day_dir(output_dir, day)
+    rows = spark.sql(
+        f"""
+        SELECT a.job_id, a.rank_position, a.tier, a.fit_score, a.cv_pdf_path, a.cover_letter_pdf_path,
+               a.cover_letter_text, e.title_en, e.company, e.url, s.city, s.country,
+               m.reasons, m.matching_skills, m.missing_skills
+        FROM {name(Table.GOLD_APPLICATIONS)} a
+        JOIN {name(Table.SILVER_JOB_EMBEDDINGS)} e ON e.job_id = a.job_id
+        JOIN {name(Table.SILVER_JOBS)} s ON s.job_id = a.job_id
+        LEFT JOIN {name(Table.GOLD_JOB_MATCHES)} m ON m.job_id = a.job_id AND m.cv_version = a.cv_version
+        WHERE startswith(a.cv_pdf_path, :prefix)
+        ORDER BY a.rank_position, a.created_at
+        """,
+        args={"prefix": day_dir + "/"},
+    ).collect()
+    if not rows:
+        print(f"No applications in {day_dir}; no page written")
+        return
+    entries = [
+        html_export.ApplicationEntry(
+            rank=r.rank_position,
+            tier=r.tier,
+            fit_score=r.fit_score,
+            job_id=r.job_id,
+            title=r.title_en,
+            company=r.company,
+            location=", ".join(p for p in (r.city, r.country) if p) or None,
+            apply_url=r.url,
+            cv_file=html_export.relative_to_day(r.cv_pdf_path, day_dir),
+            cover_letter_file=html_export.relative_to_day(r.cover_letter_pdf_path, day_dir),
+            cover_letter_text=r.cover_letter_text,
+            reasons=r.reasons or "",
+            matching_skills=list(r.matching_skills or []),
+            missing_skills=list(r.missing_skills or []),
+        )
+        for r in rows
+    ]
+    with open(f"{day_dir}/{html_export.JSON_FILE}", "w", encoding="utf-8") as f:
+        f.write(html_export.to_json(day, entries))
+    with open(f"{day_dir}/{html_export.INDEX_FILE}", "w", encoding="utf-8") as f:
+        f.write(html_export.render_index(day, entries))
+    print(f"Wrote {day_dir}/{html_export.INDEX_FILE} with {len(entries)} application(s)")
 
 
 def _create_application(source: CvDocument, cv_version: str, position: int, ranked_job: ranking.RankedJob,
