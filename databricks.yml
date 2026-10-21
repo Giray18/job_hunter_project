@@ -40,6 +40,27 @@ variables:
   max_enrich_per_run:
     description: Maximum number of job postings enriched by the LLM per run.
     default: 200
+  target_country:
+    description: ISO 3166 code of the priority country; its jobs count in any work mode.
+    default: HR
+  remote_countries:
+    description: ISO codes where remote jobs are eligible (EU + EEA + UK + CH + Western Balkans).
+    default: "AT,BE,BG,HR,CY,CZ,DK,EE,FI,FR,DE,GR,HU,IE,IT,LV,LT,LU,MT,NL,PL,PT,RO,SK,SI,ES,SE,IS,LI,NO,GB,CH,RS,BA,ME,MK,AL,XK"
+  allowed_seniority:
+    description: Seniority levels kept for matching (unknown is resolved by the judge).
+    default: "mid,senior,lead,principal,unknown"
+  max_job_age_days:
+    description: Only jobs first seen in an alert email within this many days are matched and ranked.
+    default: 14
+  max_judge_per_run:
+    description: Shortlisted jobs scored by the LLM judge per run.
+    default: 20
+  croatia_min_fit:
+    description: Fit score from which Croatian jobs rank ahead of remote jobs.
+    default: 60
+  top_n:
+    description: Number of best-ranked jobs per run; Milestone 5 tailors one CV for each.
+    default: 10
   maintainer:
     description: >
       Email of the human maintainer who gets access to prod resources. No default, so no personal

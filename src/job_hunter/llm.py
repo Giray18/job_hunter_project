@@ -32,7 +32,7 @@ def client():
 
 
 def chat_json[T: BaseModel](system: str, user: str, response_model: type[T], model: str = DEFAULT_CHAT_MODEL,
-                            max_tokens: int = 6000, retries: int = 5) -> T:
+                            max_tokens: int = 6000, retries: int = 5, temperature: float | None = None) -> T:
     """Ask the model for JSON matching `response_model` and return the validated instance.
 
     API errors back off (rate limits 30s, 60s, ...); invalid replies are retried with the validation
@@ -51,6 +51,7 @@ def chat_json[T: BaseModel](system: str, user: str, response_model: type[T], mod
                     "json_schema": {"name": response_model.__name__, "schema": schema, "strict": True},
                 },
                 max_tokens=max_tokens,
+                **({} if temperature is None else {"temperature": temperature}),
             )
         except Exception as e:  # noqa: BLE001 - API and rate-limit errors are retried
             last_error = e
