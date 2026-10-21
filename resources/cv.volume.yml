@@ -1,0 +1,12 @@
+# UC volume for CV files.
+#   input/cv.pdf          the CV to match against (uploaded manually)
+#   output/<date>/...pdf  tailored CVs (Milestone 5)
+
+resources:
+  volumes:
+    cv:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.medallion.name}
+      name: cv
+      volume_type: MANAGED
+      comment: Source CV (input/) and generated tailored CVs (output/).
