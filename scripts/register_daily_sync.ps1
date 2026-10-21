@@ -4,14 +4,14 @@ Registers a Windows scheduled task that runs the morning sync every day:
   %USERPROFILE%\Downloads\JobApplications\<date>\ and opens index.html.
 
 Run once from the repo root in PowerShell:
-  powershell -ExecutionPolicy Bypass -File scripts\register_daily_sync.ps1 [-At 07:15] [-Profile personal-projects]
+  powershell -ExecutionPolicy Bypass -File scripts\register_daily_sync.ps1 [-At 09:20] [-Profile personal-projects]
 
 The task runs only while you are logged on (it opens the page in your browser). If the PC was off at the
 scheduled time, it starts as soon as possible afterwards. Remove it with:
   Unregister-ScheduledTask -TaskName "JobHunter daily sync" -Confirm:$false
 #>
 param(
-    [string]$At = "07:15",
+    [string]$At = "09:20",
     [string]$Profile = "personal-projects",
     [string]$TaskName = "JobHunter daily sync"
 )

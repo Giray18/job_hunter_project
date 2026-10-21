@@ -6,10 +6,10 @@ resources:
       name: job_hunter_ingestion
       max_concurrent_runs: 1
 
-      # Daily at 08:00 Istanbul time. Paused automatically in dev (mode: development).
+      # Daily at 09:00 Zagreb time. Paused automatically in dev (mode: development).
       schedule:
-        quartz_cron_expression: "0 0 8 * * ?"
-        timezone_id: Europe/Istanbul
+        quartz_cron_expression: "0 0 9 * * ?"
+        timezone_id: Europe/Zagreb
 
       tasks:
         - task_key: ingest_emails
