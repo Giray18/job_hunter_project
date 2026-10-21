@@ -154,6 +154,10 @@ def slugify(text: str | None, max_length: int = 40) -> str:
     return slug[:max_length].rstrip("_") or "unknown"
 
 
+def day_dir(output_root: str, day: date) -> str:
+    return f"{output_root.rstrip('/')}/{day.isoformat()}"
+
+
 def application_dir(output_root: str, day: date, rank: int, company: str | None, title: str, job_id: str) -> str:
     """e.g. /Volumes/.../cv/output/2026-10-21/01_Teva_Pharmaceuticals_Business_Data_Steward_4479821741"""
-    return f"{output_root.rstrip('/')}/{day.isoformat()}/{rank:02d}_{slugify(company)}_{slugify(title)}_{job_id}"
+    return f"{day_dir(output_root, day)}/{rank:02d}_{slugify(company)}_{slugify(title)}_{job_id}"

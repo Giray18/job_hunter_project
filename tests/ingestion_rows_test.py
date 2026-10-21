@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from job_hunter import storage
-from job_hunter.records import AlertEmail, JobCard, JobPosting, Seniority, SilverJob, WorkMode, to_row
+from job_hunter.records import AlertEmail, ApplyType, JobCard, JobPosting, Seniority, SilverJob, WorkMode, to_row
 
 NOW = datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
 
@@ -46,9 +46,9 @@ def test_to_row_flattens_nested_cards():
 def test_to_row_failed_posting_has_nulls():
     posting = JobPosting(
         job_id="1", url="u", title=None, company=None, location=None, description=None, criteria=None,
-        http_status=404, fetched_at=NOW,
+        apply_type=ApplyType.UNKNOWN, http_status=404, fetched_at=NOW,
     )
-    assert to_row(posting) == ("1", "u", None, None, None, None, None, 404, NOW)
+    assert to_row(posting) == ("1", "u", None, None, None, None, None, "unknown", 404, NOW)
     assert not posting.ok
 
 

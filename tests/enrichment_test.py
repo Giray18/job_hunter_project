@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from job_hunter import countries, enrichment, llm
 from job_hunter.enrichment import EnrichedJob
-from job_hunter.records import JobPosting, Seniority, WorkMode
+from job_hunter.records import ApplyType, JobPosting, Seniority, WorkMode
 
 NOW = datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
 
@@ -26,7 +26,8 @@ VALID = {
 def _posting(description: str = "Wij zoeken een data analist.") -> JobPosting:
     return JobPosting(
         job_id="42", url="u", title="Data analist", company="we+", location="Bruges", description=description,
-        criteria={"Seniority level": "Mid"}, http_status=200, fetched_at=NOW,
+        criteria={"Seniority level": "Mid"}, apply_type=ApplyType.EXTERNAL, http_status=200,
+        fetched_at=NOW,
     )
 
 

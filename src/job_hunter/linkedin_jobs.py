@@ -12,7 +12,7 @@ from http import HTTPStatus
 
 import requests
 
-from job_hunter.records import JobPosting
+from job_hunter.records import ApplyType, JobPosting
 
 GUEST_POSTING_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
 _HEADERS = {
@@ -53,6 +53,7 @@ def fetch_job_posting(job_id: str, session: requests.Session | None = None, retr
         location=parsed.get("location"),
         description=parsed.get("description"),
         criteria=parsed.get("criteria"),
+        apply_type=parsed.get("apply_type", ApplyType.UNKNOWN),
         http_status=resp.status_code,
         fetched_at=datetime.now(UTC),
     )
@@ -67,7 +68,20 @@ def parse_job_posting(page: str) -> dict:
         "location": _first_text(_LOCATION_RE, page),
         "description": html_to_text(description.group(1)) if description else None,
         "criteria": {_clean(k): _clean(v) for k, v in _CRITERIA_RE.findall(page)},
+        "apply_type": detect_apply_type(page),
     }
+
+
+def detect_apply_type(page: str) -> ApplyType:
+    """The apply button's tracking name: '...apply-link-offsite' sends to the company site (external),
+    '...apply-link-onsite' is LinkedIn Easy Apply. Logged-out pages label both buttons "Apply"."""
+    offsite = "apply-link-offsite" in page or "offsite-apply" in page
+    onsite = "apply-link-onsite" in page
+    if offsite and not onsite:
+        return ApplyType.EXTERNAL
+    if onsite and not offsite:
+        return ApplyType.EASY_APPLY
+    return ApplyType.UNKNOWN
 
 
 def html_to_text(fragment: str) -> str:
