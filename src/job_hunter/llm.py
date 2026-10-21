@@ -7,6 +7,9 @@ import time
 from databricks.sdk import WorkspaceClient
 
 DEFAULT_CHAT_MODEL = "databricks-gpt-oss-120b"
+DEFAULT_EMBEDDING_MODEL = "databricks-gte-large-en"
+# Free Edition rejects embedding requests with ~32+ inputs (QPS limit); 8 per request is safe.
+EMBEDDING_BATCH_SIZE = 8
 
 _client = None
 
@@ -44,6 +47,25 @@ def chat_json(system: str, user: str, schema: dict, model: str = DEFAULT_CHAT_MO
             rate_limited = getattr(e, "status_code", None) == 429
             time.sleep(30 * (attempt + 1) if rate_limited else 5 * 2**attempt)
     raise RuntimeError(f"LLM call failed after {retries} attempts: {last_error}")
+
+
+def embed(texts: list[str], model: str = DEFAULT_EMBEDDING_MODEL, retries: int = 5,
+          pause_seconds: float = 1.0) -> list[list[float]]:
+    """Embed texts in small batches, pausing between requests and backing off on rate limits."""
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), EMBEDDING_BATCH_SIZE):
+        batch = texts[start:start + EMBEDDING_BATCH_SIZE]
+        for attempt in range(retries):
+            try:
+                resp = client().embeddings.create(model=model, input=batch)
+                vectors.extend(item.embedding for item in sorted(resp.data, key=lambda d: d.index))
+                break
+            except Exception as e:  # retried below, re-raised on the last attempt
+                if attempt == retries - 1:
+                    raise
+                time.sleep(10 * (attempt + 1) if getattr(e, "status_code", None) == 429 else 5 * 2**attempt)
+        time.sleep(pause_seconds)
+    return vectors
 
 
 def message_text(content) -> str:

@@ -12,6 +12,7 @@ dependencies = [
     "google-api-python-client>=2.201.0",
     "google-auth>=2.47.0",
     "openai>=2.14.0",
+    "pypdf>=6.21.1",
     "requests>=2.32.5",
 ]
 
@@ -30,6 +31,7 @@ main = "job_hunter.main:main"
 ingest_emails = "job_hunter.tasks.ingest_emails:main"
 fetch_postings = "job_hunter.tasks.fetch_postings:main"
 enrich_jobs = "job_hunter.tasks.enrich_jobs:main"
+process_cv = "job_hunter.tasks.process_cv:main"
 
 [build-system]
 requires = ["hatchling"]
