@@ -1,0 +1,56 @@
+# Milestone 6: Vector Search index over the stored job embeddings (prod only).
+#
+# Free Edition allows one Vector Search endpoint per workspace, so the endpoint and index exist only in prod.
+# The index reuses silver_job_embeddings.embedding (self-managed embeddings), so no job is embedded twice.
+
+targets:
+  prod:
+    resources:
+      vector_search_endpoints:
+        job_hunter_vs:
+          name: job_hunter_vs
+          # CAN_MANAGE for the runner and the maintainer comes from the prod target's permissions.
+          endpoint_type: STANDARD
+
+      vector_search_indexes:
+        jobs_index:
+          name: ${var.catalog}.${resources.schemas.medallion.name}.jobs_index
+          endpoint_name: ${resources.vector_search_endpoints.job_hunter_vs.name}
+          primary_key: job_id
+          index_type: DELTA_SYNC
+          delta_sync_index_spec:
+            source_table: ${var.catalog}.${resources.schemas.medallion.name}.silver_job_embeddings
+            pipeline_type: TRIGGERED
+            embedding_vector_columns:
+              - name: embedding
+                embedding_dimension: 1024
+            columns_to_sync:
+              - job_id
+              - embedding
+              - match_text
+              - title_en
+              - company
+              - url
+              - country_code
+              - work_mode
+              - seniority
+              - first_seen_at
+          grants:
+            - principal: ${var.maintainer}
+              privileges:
+                - SELECT
+
+      jobs:
+        job_hunter_ingestion:
+          tasks:
+            # Runs next to matching, so it never delays the daily applications.
+            - task_key: sync_index
+              depends_on:
+                - task_key: embed_jobs
+              python_wheel_task:
+                package_name: job_hunter
+                entry_point: sync_index
+                parameters:
+                  - "--index-name"
+                  - "${resources.vector_search_indexes.jobs_index.name}"
+              environment_key: default
