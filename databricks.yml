@@ -30,7 +30,7 @@ variables:
     default: job_hunter
   gmail_query:
     description: Gmail search query selecting the job-alert emails to ingest.
-    default: "from:jobalerts-noreply@linkedin.com newer_than:3d"
+    default: "from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com) newer_than:3d"
   max_postings_per_run:
     description: Maximum number of LinkedIn job pages fetched per run.
     default: 100
