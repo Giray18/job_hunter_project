@@ -39,6 +39,7 @@ process_cv = "job_hunter.tasks.process_cv:main"
 embed_jobs = "job_hunter.tasks.embed_jobs:main"
 match_jobs = "job_hunter.tasks.match_jobs:main"
 tailor_applications = "job_hunter.tasks.tailor_applications:main"
+sync_index = "job_hunter.tasks.sync_index:main"
 
 [build-system]
 requires = ["hatchling"]
