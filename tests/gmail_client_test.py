@@ -61,6 +61,36 @@ def test_extract_job_cards():
     ]
 
 
+# Trimmed from an application update email: the applied job, then a recommendation (HTML part only).
+UPDATE_HTML = """
+<a href="https://www.linkedin.com/comm/jobs/view/4478274512/">Başvurunuz IcruitmenT şirketine gönderildi</a>
+<a href="https://www.linkedin.com/comm/jobs/view/4478274512/?trackingId=x" target="_blank">
+  <table><tr><td><a href="https://www.linkedin.com/comm/jobs/view/4478274512/?trackingId=x" class="text-md">
+    Data Engineer </a></td></tr>
+  <tr><td><p class="text-sm"> IcruitmenT · Macaristan </p></td></tr>
+  <tr><td><p class="text-sm"> 19 Eki tarihinde başvuruldu </p></td></tr></table>
+</a>
+<p>Yeteneklerinizi arayan en iyi iş ilanları</p>
+<a href="https://www.linkedin.com/comm/jobs/view/4465246529/?refId=y&amp;otpToken=secret">
+  Senior Data Engineer &amp; Analytics</a>
+<p class="text-sm">Keyrock · Zagreb, Zagreb Bölgesi, Hırvatistan</p>
+<a href="https://www.linkedin.com/comm/jobs/view/4461696938/">Data Architect</a>
+<a href="https://www.linkedin.com/comm/jobs/search/">Daha fazla iş ilanı göster</a>
+"""
+
+
+def test_extract_html_job_cards():
+    assert gmail_client.extract_html_job_cards(UPDATE_HTML) == [
+        JobCard(job_id="4478274512", url="https://www.linkedin.com/jobs/view/4478274512/", title="Data Engineer",
+                company="IcruitmenT", location="Macaristan"),
+        JobCard(job_id="4465246529", url="https://www.linkedin.com/jobs/view/4465246529/",
+                title="Senior Data Engineer & Analytics", company="Keyrock",
+                location="Zagreb, Zagreb Bölgesi, Hırvatistan"),
+        JobCard(job_id="4461696938", url="https://www.linkedin.com/jobs/view/4461696938/", title="Data Architect",
+                company=None, location=None),
+    ]
+
+
 def test_strip_url_queries_removes_tokens():
     text = "View job: https://www.linkedin.com/comm/jobs/view/1/?trackingId=a&otpToken=secret done"
     assert gmail_client.strip_url_queries(text) == "View job: https://www.linkedin.com/comm/jobs/view/1/ done"
