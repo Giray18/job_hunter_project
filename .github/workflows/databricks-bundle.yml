@@ -51,4 +51,3 @@ jobs:
       - uses: databricks/setup-cli@main
       - run: databricks bundle deploy -t prod
       # Optional: trigger the job right after deploying (it also runs daily on its own trigger).
-      # - run: databricks bundle run sample_job -t prod --no-wait
