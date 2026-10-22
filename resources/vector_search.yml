@@ -18,23 +18,17 @@ targets:
           endpoint_name: ${resources.vector_search_endpoints.job_hunter_vs.name}
           primary_key: job_id
           index_type: DELTA_SYNC
+          # Vector + keyword search. The service defaults to HYBRID; leaving it unset makes every deploy plan a
+          # recreate of the index.
+          index_subtype: HYBRID
+          # No columns_to_sync: all columns of the (small) source table are synced. The API doesn't return
+          # columns_to_sync, so setting it also makes every deploy plan a recreate.
           delta_sync_index_spec:
             source_table: ${var.catalog}.${resources.schemas.medallion.name}.silver_job_embeddings
             pipeline_type: TRIGGERED
             embedding_vector_columns:
               - name: embedding
                 embedding_dimension: 1024
-            columns_to_sync:
-              - job_id
-              - embedding
-              - match_text
-              - title_en
-              - company
-              - url
-              - country_code
-              - work_mode
-              - seniority
-              - first_seen_at
           grants:
             - principal: ${var.maintainer}
               privileges:
