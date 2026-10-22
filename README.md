@@ -48,17 +48,15 @@ with this project. It's also possible to interact with it directly using the CLI
     (Note that "dev" is the default target, so the `--target` parameter
     is optional here.)
 
-    This deploys everything that's defined for this project.
-    For example, the default template would deploy a pipeline called
-    `[dev yourname] job_hunter_etl` to your workspace.
+    This deploys everything that's defined for this project, e.g. the job
+    `[dev yourname] job_hunter_ingestion`.
     You can find that resource by opening your workpace and clicking on **Jobs & Pipelines**.
 
 3. Similarly, to deploy a production copy, type:
    ```
    $ databricks bundle deploy --target prod
    ```
-   Note the default template has a includes a job that runs the pipeline every day
-   (defined in resources/sample_job.job.yml). The schedule
+   The job runs every day (schedule in resources/job_hunter_ingestion.job.yml). The schedule
    is paused when deploying in development mode (see
    https://docs.databricks.com/dev-tools/bundles/deployment-modes.html).
 
