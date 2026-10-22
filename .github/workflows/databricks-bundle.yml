@@ -33,6 +33,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - uses: databricks/setup-cli@main
       - run: databricks bundle validate --strict -t prod
+      # Shows what a merge would deploy; recreate/delete lines here make the post-merge deploy fail.
+      - run: databricks bundle plan -t prod
 
   test:
     name: Unit tests
