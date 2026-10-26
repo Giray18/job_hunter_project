@@ -5,6 +5,7 @@ Chat turns are traced to the MLflow experiment in MLFLOW_EXPERIMENT_ID; a weekly
 retrieval judges.
 """
 
+import logging
 import os
 from dataclasses import asdict
 from functools import cached_property
@@ -16,6 +17,9 @@ from databricks import sql
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from mlflow.entities import SpanType
+
+# MLflow reports a failed trace export as a one-line warning; at DEBUG it includes the traceback.
+logging.getLogger("mlflow.tracing.export").setLevel(logging.DEBUG)
 
 
 class Backend:
