@@ -91,10 +91,23 @@ def jobs_sql(catalog: str, schema: str, filters: Filters, job_ids: list[str] | N
     return sql, params
 
 
+def parse_hits(column_names: list[str], data_array: list[list] | None) -> list[dict]:
+    """Index hits as dicts in rank order; the index appends its relevance `score` as the last column."""
+    return [dict(zip(column_names, row, strict=True)) for row in data_array or []]
+
+
 def order_like(rows: list[dict], job_ids: list[str]) -> list[dict]:
     """Rows in search-hit order (SQL returns them by fit)."""
     position = {job_id: i for i, job_id in enumerate(job_ids)}
     return sorted(rows, key=lambda r: position.get(r["job_id"], len(position)))
+
+
+def with_hits(rows: list[dict], hits: list[dict]) -> list[dict]:
+    """SQL rows in hit order, each with its search rank and index score."""
+    by_id = {h["job_id"]: (rank, h.get("score")) for rank, h in enumerate(hits, 1)}
+    ordered = order_like(rows, [h["job_id"] for h in hits])
+    return [{**r, "search_rank": by_id[r["job_id"]][0], "search_score": by_id[r["job_id"]][1]}
+            for r in ordered if r["job_id"] in by_id]
 
 
 def build_context(rows: list[dict], max_summary_chars: int = 600) -> str:
