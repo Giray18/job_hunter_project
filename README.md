@@ -29,6 +29,10 @@ because they concern the catalog, which exists before the bundle and is owned by
 The chat app is created by the deploy but started on demand: *Actions → Run workflow → run_chat_app* (deploys the
 latest code and starts it) or `databricks apps start job-hunter-chat`. Free Edition stops apps after 24 hours.
 
+Output quality (`resources/quality.yml`, weekly on Sunday evening): MLflow 3 judges score the week's applications
+(fit-score calibration, cover-letter relevance, format checks → `gold_output_quality` and the `job_hunter_output_eval`
+experiment) and the chat app's traces (retrieval groundedness, relevance, citations → `job_hunter_chat_traces`).
+
 ## Getting started
 
 Choose how you want to work on this project:

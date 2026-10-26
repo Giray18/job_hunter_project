@@ -76,6 +76,9 @@ variables:
   top_n:
     description: Number of best-ranked jobs per run; Milestone 5 tailors one CV for each.
     default: 20
+  quality_lookback_days:
+    description: Days of applications and chat traces the weekly quality job judges.
+    default: 7
   maintainer:
     description: >
       Email of the human maintainer who gets access to prod resources. No default, so no personal

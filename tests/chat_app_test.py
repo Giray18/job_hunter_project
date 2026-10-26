@@ -113,3 +113,12 @@ def test_with_hits_orders_by_hit_and_drops_filtered_jobs():
         {"job_id": "3", "fit_score": 40, "search_rank": 1, "search_score": 0.9},
         {"job_id": "1", "fit_score": 90, "search_rank": 2, "search_score": 0.8},
     ]
+
+
+def test_as_documents_carry_the_llm_context_per_job():
+    rows = [{"job_id": "1", "company": "A", "title_en": "Data Engineer", "url": "u1", "fit_score": 80,
+             "search_score": 0.9}]
+    [doc] = chat_logic.as_documents(rows)
+    assert doc["page_content"] == chat_logic.build_context(rows)
+    assert doc["page_content"].startswith("[1] A - Data Engineer")
+    assert doc["metadata"] == {"doc_uri": "u1", "chunk_id": "1", "search_score": 0.9}

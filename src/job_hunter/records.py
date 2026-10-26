@@ -218,6 +218,25 @@ class Application:
     created_at: datetime
 
 
+@dataclass(frozen=True)
+class OutputQuality:
+    """Row of gold_output_quality: LLM-judge and code checks of one application's fit score and cover letter."""
+
+    job_id: str
+    cv_version: str
+    fit_calibration: str | None  # calibrated / too_high / too_low
+    fit_calibration_rationale: str | None
+    letter_relevance: str | None  # strong / adequate / weak
+    letter_relevance_rationale: str | None
+    letter_words: int
+    letter_length_ok: bool
+    letter_names_company: bool
+    letter_placeholders: bool
+    judge_model: str
+    mlflow_run_id: str
+    evaluated_at: datetime
+
+
 def to_row(record: Any) -> tuple:
     """Dataclass → tuple of plain values (enums → values, nested dataclasses → tuples) for createDataFrame."""
     return tuple(_plain(getattr(record, f.name)) for f in fields(record))
