@@ -110,3 +110,7 @@ targets:
             - principal: ${var.maintainer}
               privileges:
                 - ALL_PRIVILEGES
+            # The chat app's own service principal; its table/index/volume grants come from the app resources.
+            - principal: ${resources.apps.job_hunter_chat.service_principal_client_id}
+              privileges:
+                - USE_SCHEMA

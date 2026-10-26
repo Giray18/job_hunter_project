@@ -17,7 +17,9 @@ targets:
           name: job-hunter-chat
           description: Ask questions about the job pipeline's jobs, browse them and download tailored documents.
           source_code_path: ../src/job_hunter_app
-          # The app's own service principal gets exactly these grants (read-only).
+          # The app's own service principal gets exactly these grants (read-only). Names use ${var.schema} rather
+          # than the schema resource: the schema's grants refer to this app, and the reverse would be a cycle.
+          # Granting them needs MANAGE on the catalog for the deploying identity (see README, one-time setup).
           resources:
             - name: sql-warehouse
               sql_warehouse:
@@ -33,36 +35,36 @@ targets:
                 permission: CAN_QUERY
             - name: jobs-index
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.jobs_index
+                securable_full_name: ${var.catalog}.${var.schema}.jobs_index
                 securable_type: TABLE
                 permission: SELECT
             - name: cv-volume
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.${resources.volumes.cv.name}
+                securable_full_name: ${var.catalog}.${var.schema}.cv
                 securable_type: VOLUME
                 permission: READ_VOLUME
             - name: job-embeddings
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.silver_job_embeddings
+                securable_full_name: ${var.catalog}.${var.schema}.silver_job_embeddings
                 securable_type: TABLE
                 permission: SELECT
             - name: jobs
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.silver_jobs
+                securable_full_name: ${var.catalog}.${var.schema}.silver_jobs
                 securable_type: TABLE
                 permission: SELECT
             - name: job-matches
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_job_matches
+                securable_full_name: ${var.catalog}.${var.schema}.gold_job_matches
                 securable_type: TABLE
                 permission: SELECT
             - name: applications
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_applications
+                securable_full_name: ${var.catalog}.${var.schema}.gold_applications
                 securable_type: TABLE
                 permission: SELECT
             - name: application-status
               uc_securable:
-                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_application_status
+                securable_full_name: ${var.catalog}.${var.schema}.gold_application_status
                 securable_type: TABLE
                 permission: SELECT
