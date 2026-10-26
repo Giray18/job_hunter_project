@@ -39,21 +39,44 @@ class Backend:
             columns = [c[0] for c in cur.description]
             return [{c: _plain(v) for c, v in zip(columns, row, strict=True)} for row in cur.fetchall()]
 
-    def search(self, question: str, filters: Filters, num_results: int = 15) -> list[dict]:
-        """Hybrid (vector + keyword) search on the jobs index, then job details from SQL in hit order."""
-        vector = self.openai.embeddings.create(model=self.embedding_endpoint, input=[question]).data[0].embedding
+    def query_index(self, query: str, filters: Filters, query_type: str = "HYBRID",
+                    num_results: int = 15) -> list[dict]:
+        """Raw hits from the jobs index: the query is embedded with the same GTE model as the jobs, then searched
+        by vector (ANN) or by vector + keywords (HYBRID). Each hit has job_id, title_en, company and score."""
+        vector = self.openai.embeddings.create(model=self.embedding_endpoint, input=[query]).data[0].embedding
         result = self.workspace.vector_search_indexes.query_index(
             index_name=self.index_name,
             columns=chat_logic.SEARCH_COLUMNS,
-            query_text=question,
             query_vector=vector,
-            query_type="HYBRID",
+            query_text=query if query_type == "HYBRID" else None,
+            query_type=query_type,
             num_results=num_results,
             filters_json=chat_logic.index_filters_json(filters),
         )
-        rows = result.result.data_array if result.result and result.result.data_array else []
-        job_ids = [row[0] for row in rows]
-        return chat_logic.order_like(self.jobs(filters, job_ids), job_ids)
+        columns = [c.name for c in result.manifest.columns] if result.manifest else []
+        return chat_logic.parse_hits(columns, result.result.data_array if result.result else None)
+
+    def search(self, question: str, filters: Filters, query_type: str = "HYBRID",
+               num_results: int = 15) -> list[dict]:
+        """Index hits joined with the job details from SQL, in hit order, with search_rank and search_score."""
+        hits = self.query_index(question, filters, query_type, num_results)
+        return chat_logic.with_hits(self.jobs(filters, [h["job_id"] for h in hits]), hits)
+
+    def index_info(self) -> dict:
+        """Name, endpoint, type and sync status of the jobs index."""
+        index = self.workspace.vector_search_indexes.get_index(self.index_name)
+        spec = index.delta_sync_index_spec
+        return {
+            "index": index.name,
+            "endpoint": index.endpoint_name,
+            "type": index.index_type.value if index.index_type else None,
+            "search": index.index_subtype.value if index.index_subtype else None,
+            "source table": spec.source_table if spec else None,
+            "sync": spec.pipeline_type.value if spec and spec.pipeline_type else None,
+            "ready": index.status.ready if index.status else None,
+            "rows indexed": index.status.indexed_row_count if index.status else None,
+            "status": index.status.message if index.status else None,
+        }
 
     def answer(self, question: str, rows: list[dict], history: list[dict]) -> str:
         resp = self.openai.chat.completions.create(

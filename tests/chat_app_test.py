@@ -96,3 +96,20 @@ def test_message_text_skips_reasoning_blocks():
     content = [{"type": "reasoning", "summary": [{"text": "thinking"}]}, {"type": "text", "text": "Answer"}]
     assert chat_logic.message_text(content) == "Answer"
     assert chat_logic.message_text("plain") == "plain"
+
+
+def test_parse_hits_keeps_rank_order_and_score():
+    hits = chat_logic.parse_hits(["job_id", "title_en", "company", "score"],
+                                 [["2", "Analyst", "B", 0.031], ["1", "Data Engineer", "A", 0.029]])
+    assert [h["job_id"] for h in hits] == ["2", "1"]
+    assert hits[0]["score"] == 0.031
+    assert chat_logic.parse_hits(["job_id"], None) == []
+
+
+def test_with_hits_orders_by_hit_and_drops_filtered_jobs():
+    hits = [{"job_id": "3", "score": 0.9}, {"job_id": "1", "score": 0.8}, {"job_id": "2", "score": 0.7}]
+    rows = [{"job_id": "1", "fit_score": 90}, {"job_id": "3", "fit_score": 40}]  # job 2 removed by the SQL filters
+    assert chat_logic.with_hits(rows, hits) == [
+        {"job_id": "3", "fit_score": 40, "search_rank": 1, "search_score": 0.9},
+        {"job_id": "1", "fit_score": 90, "search_rank": 2, "search_score": 0.8},
+    ]

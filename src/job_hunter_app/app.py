@@ -1,10 +1,14 @@
-"""Job hunter chat: ask questions about the pipeline's jobs (RAG over the Vector Search index) and browse them."""
+"""Job hunter chat: ask questions about the pipeline's jobs (RAG over the Vector Search index), search the index
+directly and browse the jobs."""
 
 import os
+import time
 
+import chat_logic
 import streamlit as st
 from backend import Backend
 from chat_logic import NO_STATUS, Filters
+from databricks.sdk.errors import DatabricksError
 
 st.set_page_config(page_title="Job hunter chat", layout="wide")
 
@@ -13,6 +17,8 @@ COUNTRIES = ["HR", "SI", "RS", "BA", "ME", "MK", "AL", "AT", "HU", "IT", "DE", "
 WORK_MODES = ["remote", "hybrid", "onsite", "unknown"]
 SENIORITIES = ["intern", "junior", "mid", "senior", "lead", "principal", "unknown"]
 STATUSES = [NO_STATUS, "applied", "skipped", "closed", "not_eligible"]
+SEARCH_COLUMNS = ["search_rank", "search_score"]
+SEARCH_MODES = {"Hybrid (vector + keywords)": "HYBRID", "Vector only (ANN)": "ANN"}
 TABLE_COLUMNS = ["fit_score", "company", "title_en", "country_code", "city", "work_mode", "seniority", "status",
                  "first_seen_at", "url"]
 
@@ -38,9 +44,16 @@ def job_table(rows: list[dict], key: str):
     if not rows:
         st.info("No jobs match.")
         return
+    columns = (SEARCH_COLUMNS if "search_rank" in rows[0] else []) + TABLE_COLUMNS
     st.dataframe(
-        [{c: r.get(c) for c in TABLE_COLUMNS} for r in rows],
-        column_config={"url": st.column_config.LinkColumn("LinkedIn", display_text="open"),
+        [{c: r.get(c) for c in columns} for r in rows],
+        column_config={"search_rank": st.column_config.NumberColumn("#"),
+                       "search_score": st.column_config.NumberColumn(
+                           "Index score", format="%.4f",
+                           help="Relevance from the Vector Search index; higher is closer. Compare within one search "
+                                "only: ANN scores come from the vector distance, Hybrid scores fuse vector and "
+                                "keyword ranks."),
+                       "url": st.column_config.LinkColumn("LinkedIn", display_text="open"),
                        "fit_score": st.column_config.NumberColumn("Fit"),
                        "first_seen_at": st.column_config.DatetimeColumn("First seen", format="YYYY-MM-DD")},
         hide_index=True, use_container_width=True, key=f"{key}-table",
@@ -88,6 +101,38 @@ def chat_tab(filters: Filters):
         job_table(rows, "answer")
 
 
+def semantic_tab(filters: Filters):
+    """Query the Vector Search index directly and show its raw ranking."""
+    st.caption(f"Searches `{backend().index_name}`: the query is embedded with `{backend().embedding_endpoint}` "
+               "(the model that embedded the jobs) and matched against the job vectors in the index.")
+    with st.form("semantic"):
+        query = st.text_input("Search", placeholder="e.g. lakehouse platform with dbt and Airflow")
+        left, right = st.columns(2)
+        mode = left.radio("Mode", list(SEARCH_MODES), horizontal=True)
+        num_results = right.slider("Results", 5, 50, 15, step=5)
+        submitted = st.form_submit_button("Search the index")
+    if submitted and query:
+        started = time.perf_counter()
+        hits = backend().query_index(query, filters, SEARCH_MODES[mode], num_results)
+        index_ms = (time.perf_counter() - started) * 1000
+        rows = chat_logic.with_hits(backend().jobs(filters, [h["job_id"] for h in hits]), hits)
+        st.session_state["semantic"] = {"hits": hits, "rows": rows, "mode": SEARCH_MODES[mode], "ms": index_ms,
+                                        "filters": chat_logic.index_filters_json(filters)}
+    result = st.session_state.get("semantic")
+    if result:
+        st.caption(f"`query_type={result['mode']}` · filters sent to the index: `{result['filters'] or 'none'}` · "
+                   f"{len(result['hits'])} hit(s) in {result['ms']:.0f} ms (embedding + index query) · "
+                   f"{len(result['rows'])} left after the fit/status/age filters")
+        job_table(result["rows"], "semantic")
+        with st.expander("Raw index response"):
+            st.dataframe(result["hits"], hide_index=True, use_container_width=True)
+    with st.expander("About the index"):
+        try:
+            st.json(backend().index_info())
+        except DatabricksError as error:  # describing the index needs more than the SELECT used for searching
+            st.warning(f"Index details unavailable: {error}")
+
+
 def browse_tab(filters: Filters):
     rows = backend().jobs(filters)
     st.caption(f"{len(rows)} job(s), best fit first")
@@ -96,8 +141,10 @@ def browse_tab(filters: Filters):
 
 filters = sidebar_filters()
 st.title("Job hunter")
-chat, browse = st.tabs(["Chat", "Browse"])
+chat, semantic, browse = st.tabs(["Chat", "Semantic search", "Browse"])
 with chat:
     chat_tab(filters)
+with semantic:
+    semantic_tab(filters)
 with browse:
     browse_tab(filters)
