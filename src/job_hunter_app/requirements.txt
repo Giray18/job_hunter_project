@@ -1,4 +1,6 @@
 databricks-sdk>=0.40
 databricks-sql-connector>=3.4
 openai>=1.40
-mlflow-tracing>=3.5
+# Not mlflow-tracing: it shares the `mlflow` package folder with the preinstalled mlflow-skinny, and a mix of
+# both versions fails on import. Upgrading mlflow-skinny itself keeps the folder consistent (it includes tracing).
+mlflow-skinny>=3.8,<4
