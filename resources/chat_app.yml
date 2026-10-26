@@ -1,0 +1,68 @@
+# Milestone 7: Streamlit chat app over the jobs (prod only, like the Vector Search index it queries).
+#
+# `bundle deploy` creates/updates the app and its permissions; it does not start it. Start it when needed with the
+# "Run workflow" button (run_chat_app) or `databricks apps start job-hunter-chat`. Free Edition stops apps after 24h.
+
+variables:
+  warehouse_id:
+    description: SQL warehouse the chat app queries.
+    lookup:
+      warehouse: Serverless Starter Warehouse
+
+targets:
+  prod:
+    resources:
+      apps:
+        job_hunter_chat:
+          name: job-hunter-chat
+          description: Ask questions about the job pipeline's jobs, browse them and download tailored documents.
+          source_code_path: ../src/job_hunter_app
+          # The app's own service principal gets exactly these grants (read-only).
+          resources:
+            - name: sql-warehouse
+              sql_warehouse:
+                id: ${var.warehouse_id}
+                permission: CAN_USE
+            - name: llm
+              serving_endpoint:
+                name: ${var.llm_model}
+                permission: CAN_QUERY
+            - name: embeddings
+              serving_endpoint:
+                name: databricks-gte-large-en
+                permission: CAN_QUERY
+            - name: jobs-index
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.jobs_index
+                securable_type: TABLE
+                permission: SELECT
+            - name: cv-volume
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.${resources.volumes.cv.name}
+                securable_type: VOLUME
+                permission: READ_VOLUME
+            - name: job-embeddings
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.silver_job_embeddings
+                securable_type: TABLE
+                permission: SELECT
+            - name: jobs
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.silver_jobs
+                securable_type: TABLE
+                permission: SELECT
+            - name: job-matches
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_job_matches
+                securable_type: TABLE
+                permission: SELECT
+            - name: applications
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_applications
+                securable_type: TABLE
+                permission: SELECT
+            - name: application-status
+              uc_securable:
+                securable_full_name: ${var.catalog}.${resources.schemas.medallion.name}.gold_application_status
+                securable_type: TABLE
+                permission: SELECT
