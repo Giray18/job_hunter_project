@@ -1,13 +1,10 @@
-"""CV PDF → text → structured, validated CvDocument (via LLM) → matching text for embeddings."""
+"""CV PDF → layout elements (ai_parse_document) → text → structured, validated CvDocument (via LLM) → matching text for embeddings."""
 
 import hashlib
-import io
-import logging
 import re
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pypdf import PdfReader
 
 from job_hunter.records import CvVersion
 
@@ -104,11 +101,38 @@ Rules:
 Never invent, merge or drop items. Use null or [] when something is absent."""
 
 
-def extract_text(pdf_bytes: bytes) -> str:
-    # Icon fonts in designed CVs make pypdf log harmless "Odd-length string" warnings.
-    logging.getLogger("pypdf").setLevel(logging.ERROR)
-    reader = PdfReader(io.BytesIO(pdf_bytes))
-    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+# Layout elements that are not CV text: page footers ("Page 1 | 3") and figures (icons, timeline arrows).
+SKIPPED_ELEMENT_TYPES = ("page_number", "figure")
+LOW_CONFIDENCE = 0.5
+
+
+def parse_document_sql() -> str:
+    """One row per layout element of the PDF at :path, in reading order (ai_parse_document v2 + variant_explode).
+    A file that fails to parse returns one row with only `error` set."""
+    return """
+        WITH parsed AS (
+            SELECT ai_parse_document(content, map('version', '2.0')) AS p
+            FROM read_files(:path, format => 'binaryFile')
+        )
+        SELECT e.pos,
+               e.value:type::STRING             AS type,
+               e.value:content::STRING          AS content,
+               e.value:bbox[0].page_id::INT + 1 AS page,
+               e.value:confidence::DOUBLE       AS confidence,
+               p:error_status::STRING           AS error
+        FROM parsed LEFT JOIN LATERAL variant_explode(p:document:elements) AS e
+        ORDER BY e.pos
+    """
+
+
+def elements_text(elements: list[dict]) -> str:
+    """CV text from parsed layout elements: their content in reading order, without page numbers and figures."""
+    kept = [e for e in elements if e.get("type") not in SKIPPED_ELEMENT_TYPES and (e.get("content") or "").strip()]
+    return "\n".join(e["content"].strip() for e in sorted(kept, key=lambda e: e["pos"]))
+
+
+def low_confidence(elements: list[dict]) -> list[dict]:
+    return [e for e in elements if e.get("confidence") is not None and e["confidence"] < LOW_CONFIDENCE]
 
 
 def file_version(pdf_bytes: bytes) -> str:
