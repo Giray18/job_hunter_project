@@ -29,8 +29,13 @@ targets:
             embedding_vector_columns:
               - name: embedding
                 embedding_dimension: 1024
+          # Authoritative: these are the index's only grants after a deploy, so the chat app's principal must be
+          # listed here too (its app resource grant would otherwise be removed).
           grants:
             - principal: ${var.maintainer}
+              privileges:
+                - SELECT
+            - principal: ${var.chat_app_sp}
               privileges:
                 - SELECT
 
