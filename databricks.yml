@@ -28,6 +28,10 @@ variables:
   chat_app_sp:
     description: Application ID of the chat app's own service principal (created with the app; prod only).
     default: ${resources.apps.job_hunter_chat.service_principal_client_id}
+  warehouse_id:
+    description: SQL warehouse the chat app queries.
+    lookup:
+      warehouse: Serverless Starter Warehouse
   secret_scope:
     description: Databricks secret scope holding gmail_client_id, gmail_client_secret and gmail_refresh_token.
     default: job_hunter
