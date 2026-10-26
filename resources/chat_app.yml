@@ -3,12 +3,6 @@
 # `bundle deploy` creates/updates the app and its permissions; it does not start it. Start it when needed with the
 # "Run workflow" button (run_chat_app) or `databricks apps start job-hunter-chat`. Free Edition stops apps after 24h.
 
-variables:
-  warehouse_id:
-    description: SQL warehouse the chat app queries.
-    lookup:
-      warehouse: Serverless Starter Warehouse
-
 targets:
   prod:
     resources:
@@ -17,6 +11,23 @@ targets:
           name: job-hunter-chat
           description: Ask questions about the job pipeline's jobs, browse them and download tailored documents.
           source_code_path: ../src/job_hunter_app
+          # Replaces an app.yaml in the source folder, so the names below can come from bundle variables.
+          # value_from refers to the resource names below.
+          config:
+            command: ["streamlit", "run", "app.py"]
+            env:
+              - name: DATABRICKS_WAREHOUSE_ID
+                value_from: sql-warehouse
+              - name: LLM_ENDPOINT
+                value_from: llm
+              - name: EMBEDDING_ENDPOINT
+                value_from: embeddings
+              - name: JOB_HUNTER_CATALOG
+                value: ${var.catalog}
+              - name: JOB_HUNTER_SCHEMA
+                value: ${var.schema}
+              - name: JOB_HUNTER_INDEX
+                value: ${var.catalog}.${var.schema}.jobs_index
           # The app's own service principal gets exactly these grants (read-only). Names use ${var.schema} rather
           # than the schema resource: the schema's grants refer to this app, and the reverse would be a cycle.
           # Granting them needs MANAGE on the catalog for the deploying identity (see README, one-time setup).
