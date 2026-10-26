@@ -1,0 +1,15 @@
+command: ["streamlit", "run", "app.py"]
+env:
+  # Resource keys are defined in resources/chat_app.yml.
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: LLM_ENDPOINT
+    valueFrom: llm
+  - name: EMBEDDING_ENDPOINT
+    valueFrom: embeddings
+  - name: JOB_HUNTER_CATALOG
+    value: job_hunter_project
+  - name: JOB_HUNTER_SCHEMA
+    value: medallion
+  - name: JOB_HUNTER_INDEX
+    value: job_hunter_project.medallion.jobs_index

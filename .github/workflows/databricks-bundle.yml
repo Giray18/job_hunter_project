@@ -11,6 +11,10 @@ on:
         description: "Approve destructive changes (deleting pipelines, schemas, volumes). Review the failed plan first."
         type: boolean
         default: false
+      run_chat_app:
+        description: "Deploy the latest chat app code and start the app (it stops by itself after 24h)."
+        type: boolean
+        default: false
 
 concurrency:
   group: databricks-bundle-${{ github.ref }}
@@ -58,4 +62,7 @@ jobs:
       - uses: databricks/setup-cli@main
       # Deletions of data assets need an explicit manual run with auto_approve; pushes never approve them.
       - run: databricks bundle deploy -t prod ${{ inputs.auto_approve && '--auto-approve' || '' }}
+      # The chat app is started only on request (Free Edition limits app runtime and compute).
+      - if: inputs.run_chat_app
+        run: databricks bundle run job_hunter_chat -t prod
       # Optional: trigger the job right after deploying (it also runs daily on its own trigger).
