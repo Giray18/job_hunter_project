@@ -25,6 +25,9 @@ variables:
   runner_sp:
     description: Application ID of the 'runner' service principal used for CI/CD and job runs.
     default: dfb84752-414e-4c6b-9946-59d3e848e9f0
+  chat_app_sp:
+    description: Application ID of the chat app's own service principal (created with the app; prod only).
+    default: ${resources.apps.job_hunter_chat.service_principal_client_id}
   secret_scope:
     description: Databricks secret scope holding gmail_client_id, gmail_client_secret and gmail_refresh_token.
     default: job_hunter
@@ -110,3 +113,7 @@ targets:
             - principal: ${var.maintainer}
               privileges:
                 - ALL_PRIVILEGES
+            # The chat app's own service principal; its table/index/volume grants come from the app resources.
+            - principal: ${var.chat_app_sp}
+              privileges:
+                - USE_SCHEMA
