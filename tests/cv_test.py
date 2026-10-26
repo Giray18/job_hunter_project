@@ -100,3 +100,22 @@ def test_strict_schema_inlines_nested_models():
 
     check(schema)
     assert schema["properties"]["experience"]["items"]["properties"]["company"]["type"] == "string"
+
+
+def test_elements_text_keeps_reading_order_and_drops_layout_noise():
+    elements = [
+        {"pos": 2, "type": "text", "content": "16 years: engineering → data & AI ", "page": 1, "confidence": 0.9},
+        {"pos": 0, "type": "title", "content": "Cihan Giray ONER", "page": 1, "confidence": 0.97},
+        {"pos": 3, "type": "figure", "content": "→", "page": 1, "confidence": 0.8},
+        {"pos": 4, "type": "page_number", "content": "Page 1 | 3", "page": 1, "confidence": 0.99},
+        {"pos": 1, "type": "section_header", "content": "DATA & AI ENGINEER", "page": 1, "confidence": 0.95},
+        {"pos": 5, "type": "text", "content": "  ", "page": 2, "confidence": 0.4},
+    ]
+    assert cv.elements_text(elements) == "Cihan Giray ONER\nDATA & AI ENGINEER\n16 years: engineering → data & AI"
+    assert [e["pos"] for e in cv.low_confidence(elements)] == [5]
+
+
+def test_parse_document_sql_binds_the_path():
+    sql = cv.parse_document_sql()
+    assert "read_files(:path, format => 'binaryFile')" in sql
+    assert "variant_explode(p:document:elements)" in sql

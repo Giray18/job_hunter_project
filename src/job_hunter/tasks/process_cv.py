@@ -1,4 +1,4 @@
-"""Job task: CV PDF in a UC volume → validated CvDocument + embedding → silver_cv."""
+"""Job task: CV PDF in a UC volume → ai_parse_document layout elements → validated CvDocument + embedding → silver_cv."""
 
 import argparse
 from datetime import UTC, datetime
@@ -30,8 +30,18 @@ def main():
         print(f"CV version {version} already processed; nothing to do")
         return
 
-    text = cv.extract_text(pdf_bytes)
-    print(f"Extracted {len(text)} characters from {args.cv_path} (version {version})")
+    rows = [r.asDict() for r in spark.sql(cv.parse_document_sql(), args={"path": args.cv_path}).collect()]
+    if errors := {r["error"] for r in rows if r["error"]}:
+        raise RuntimeError(f"ai_parse_document failed for {args.cv_path}: {errors}")
+    elements = [r for r in rows if r["pos"] is not None]
+    text = cv.elements_text(elements)
+    if not text:
+        raise RuntimeError(f"ai_parse_document found no text in {args.cv_path}")
+    print(f"Parsed {len(elements)} layout elements on {max(e['page'] or 1 for e in elements)} page(s) into "
+          f"{len(text)} characters from {args.cv_path} (version {version})")
+    if unsure := cv.low_confidence(elements):
+        print(f"WARNING: {len(unsure)} element(s) parsed with low confidence: "
+              f"{[(e['page'], (e['content'] or '')[:60]) for e in unsure]}")
 
     document = llm.chat_json(cv.SYSTEM_PROMPT, text, cv.CvDocument, model=args.model, max_tokens=16000)
     print(f"Structured CV: {len(document.experience)} roles, {len(document.certifications)} certifications")
