@@ -18,6 +18,7 @@ class Table(StrEnum):
     GOLD_JOB_MATCHES = "gold_job_matches"
     GOLD_APPLICATIONS = "gold_applications"
     GOLD_APPLICATION_STATUS = "gold_application_status"
+    GOLD_OUTPUT_QUALITY = "gold_output_quality"
 
 
 JOB_CARD_TYPE = "STRUCT<job_id: STRING, url: STRING, title: STRING, company: STRING, location: STRING>"
@@ -134,6 +135,23 @@ GOLD_APPLICATION_STATUS_SCHEMA = """
 """
 
 
+GOLD_OUTPUT_QUALITY_SCHEMA = """
+    job_id STRING NOT NULL,
+    cv_version STRING NOT NULL,
+    fit_calibration STRING,
+    fit_calibration_rationale STRING,
+    letter_relevance STRING,
+    letter_relevance_rationale STRING,
+    letter_words INT,
+    letter_length_ok BOOLEAN,
+    letter_names_company BOOLEAN,
+    letter_placeholders BOOLEAN,
+    judge_model STRING,
+    mlflow_run_id STRING,
+    evaluated_at TIMESTAMP
+"""
+
+
 @dataclass(frozen=True)
 class TableSpec:
     ddl: str
@@ -172,6 +190,10 @@ TABLES: dict[Table, TableSpec] = {
     Table.GOLD_APPLICATION_STATUS: TableSpec(
         GOLD_APPLICATION_STATUS_SCHEMA, records.ApplicationStatus,
         "Latest status per job (applied, skipped, closed, not_eligible); any status removes the job from rankings.",
+    ),
+    Table.GOLD_OUTPUT_QUALITY: TableSpec(
+        GOLD_OUTPUT_QUALITY_SCHEMA, records.OutputQuality,
+        "LLM-judge (MLflow) and code checks of each application's fit score and cover letter.",
     ),
 }
 

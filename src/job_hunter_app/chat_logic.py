@@ -110,25 +110,35 @@ def with_hits(rows: list[dict], hits: list[dict]) -> list[dict]:
             for r in ordered if r["job_id"] in by_id]
 
 
-def build_context(rows: list[dict], max_summary_chars: int = 600) -> str:
+def job_block(n: int, r: dict, max_summary_chars: int = 600) -> str:
+    """One job as the LLM sees it, numbered [n]."""
+    lines = [
+        f"[{n}] {r.get('company') or '?'} - {r.get('title_en') or '?'}",
+        (f"Location: {', '.join(x for x in (r.get('city'), r.get('country_code')) if x) or 'unknown'}"
+         f" | work mode: {r.get('work_mode') or 'unknown'} | seniority: {r.get('seniority') or 'unknown'}"),
+        (f"Fit score: {r['fit_score'] if r.get('fit_score') is not None else 'not judged'}"
+         f" | status: {r.get('status') or 'no status'} | url: {r.get('url') or '-'}"),
+    ]
+    if r.get("summary"):
+        lines.append(f"Summary: {r['summary'][:max_summary_chars]}")
+    if r.get("reasons"):
+        lines.append(f"Judge: {r['reasons'][:max_summary_chars]}")
+    if r.get("missing_skills"):
+        lines.append(f"Missing skills: {', '.join(r['missing_skills'])}")
+    return "\n".join(lines)
+
+
+def build_context(rows: list[dict]) -> str:
     """Numbered job blocks for the LLM, in the given order."""
-    blocks = []
-    for n, r in enumerate(rows, 1):
-        lines = [
-            f"[{n}] {r.get('company') or '?'} - {r.get('title_en') or '?'}",
-            (f"Location: {', '.join(x for x in (r.get('city'), r.get('country_code')) if x) or 'unknown'}"
-             f" | work mode: {r.get('work_mode') or 'unknown'} | seniority: {r.get('seniority') or 'unknown'}"),
-            (f"Fit score: {r['fit_score'] if r.get('fit_score') is not None else 'not judged'}"
-             f" | status: {r.get('status') or 'no status'} | url: {r.get('url') or '-'}"),
-        ]
-        if r.get("summary"):
-            lines.append(f"Summary: {r['summary'][:max_summary_chars]}")
-        if r.get("reasons"):
-            lines.append(f"Judge: {r['reasons'][:max_summary_chars]}")
-        if r.get("missing_skills"):
-            lines.append(f"Missing skills: {', '.join(r['missing_skills'])}")
-        blocks.append("\n".join(lines))
-    return "\n\n".join(blocks)
+    return "\n\n".join(job_block(n, r) for n, r in enumerate(rows, 1))
+
+
+def as_documents(rows: list[dict]) -> list[dict]:
+    """Retrieved jobs in MLflow's retriever-document shape, with the exact text the LLM gets; MLflow's
+    retrieval judges (groundedness, relevance) read these from the trace."""
+    return [{"page_content": job_block(n, r),
+             "metadata": {"doc_uri": r.get("url"), "chunk_id": r["job_id"], "search_score": r.get("search_score")}}
+            for n, r in enumerate(rows, 1)]
 
 
 def chat_messages(question: str, rows: list[dict], history: list[dict] | None = None) -> list[dict]:

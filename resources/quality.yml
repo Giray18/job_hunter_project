@@ -1,0 +1,60 @@
+# Milestone 8: quality of the LLM outputs with MLflow 3 judges (prod only, like the chat app whose traces it scores).
+#
+# Weekly, separate from the daily pipeline:
+# - evaluate_outputs: two LLM judges (fit-score calibration, cover-letter relevance) + format checks on the week's
+#   applications → MLflow run in output_eval + gold_output_quality.
+# - evaluate_chat: MLflow retrieval judges (groundedness, relevance, citations) on the chat app's traces.
+
+targets:
+  prod:
+    resources:
+      experiments:
+        chat_traces:
+          # The chat app writes one trace per chat turn here (resources/chat_app.yml grants it CAN_EDIT).
+          name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_chat_traces
+        output_eval:
+          name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_output_eval
+
+      jobs:
+        job_hunter_quality:
+          name: job_hunter_quality
+          max_concurrent_runs: 1
+          schedule:
+            quartz_cron_expression: "0 0 20 ? * SUN"
+            timezone_id: Europe/Zagreb
+          tasks:
+            - task_key: evaluate_outputs
+              python_wheel_task:
+                package_name: job_hunter
+                entry_point: evaluate_outputs
+                parameters:
+                  - "--catalog"
+                  - "${var.catalog}"
+                  - "--schema"
+                  - "${resources.schemas.medallion.name}"
+                  - "--experiment-id"
+                  - "${resources.experiments.output_eval.id}"
+                  - "--model"
+                  - "${var.llm_model}"
+                  - "--lookback-days"
+                  - "${var.quality_lookback_days}"
+              environment_key: eval
+            - task_key: evaluate_chat
+              python_wheel_task:
+                package_name: job_hunter
+                entry_point: evaluate_chat
+                parameters:
+                  - "--experiment-id"
+                  - "${resources.experiments.chat_traces.id}"
+                  - "--model"
+                  - "${var.llm_model}"
+                  - "--lookback-days"
+                  - "${var.quality_lookback_days}"
+              environment_key: eval
+          environments:
+            - environment_key: eval
+              spec:
+                environment_version: "5"
+                dependencies:
+                  - ../dist/*.whl
+                  - mlflow[databricks]>=3.8,<4
