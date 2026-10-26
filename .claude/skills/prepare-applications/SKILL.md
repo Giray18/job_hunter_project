@@ -25,6 +25,9 @@ For each entry in rank order, don't stop to ask; collect everything for one summ
    - "Başvuru gönderildi" / "Applied … ago" → status **applied** (already applied), skip.
    - Workplace chip "İş yerinde" / "On-site" and the country is not Croatia → status **not_eligible**, skip.
      Hybrid outside Croatia → not_eligible too. Croatian jobs: any work mode is fine.
+   - **Remote jobs: always apply**, even when the posting or form limits hiring to other countries (e.g. "based in
+     Netherlands", "UK only", a fixed country list). Don't skip them as not_eligible; mention the restriction as a
+     risk in the summary.
 2. **external** ("Başvur" / "Apply"): click it; continue on the company site in the new tab, and close the LinkedIn tab.
    **easy_apply** ("Kolay Başvuru" / "Easy Apply"): work through the LinkedIn modal.
 3. Fill in the form:
@@ -33,10 +36,18 @@ For each entry in rank order, don't stop to ask; collect everything for one summ
      3 years for a tool that is in the CV.
    - Answer **No** for a tool or skill that is not in the CV. Never claim experience the CV doesn't support.
    - Leave optional demographic or diversity questions blank. If one is required, pick "Decline / prefer not to say".
+     Some forms call them optional but block the submit until they're answered; then pick "prefer not to say" in
+     each one by clicking the option (typing to filter can silently select the first option), and check the values
+     before retrying.
    - Free-text motivation or "tell us about a problem" questions: write from the CV and the cover letter; it's fine
      to extrapolate mildly.
+   - Location and work-authorization questions: answer with the real situation (living in Zagreb, Croatia; Croatian
+     residence and work permit; open to B2B through own company). If a required country list has no Croatia, pick
+     "Other" when it exists; if there is no truthful option, mark the job "needs you".
    - Upload the CV. Upload the cover letter when there is a field for it (cover letter or additional documents);
      otherwise paste `cover_letter_text` into a cover-letter text box if there is one.
+   - Use the generated CV and cover letter as they are. The user accepts extrapolated achievements and metrics in
+     them; don't rewrite or strip claims.
    - Accept required privacy or data-processing agreements for the application. Leave optional marketing or talent
      pool consents unticked.
 4. Uploads:
@@ -45,6 +56,8 @@ For each entry in rank order, don't stop to ask; collect everything for one summ
      input is appended visibly with `aria-label="intercepted-cv-file-input"` instead of opening the OS picker.
    - Click "CV yükle", `find` the intercepted input, upload, then restore the original `click`.
    - Check that the newly uploaded CV (today's date) is the selected resume.
+   - LinkedIn Easy Apply may pre-fill an old saved cover letter ("Dear Hiring Manager, I am showing my ambition…").
+     Replace it with `cover_letter_text` (from "Dear" to the sign-off).
 5. Stop at the **final review / submit step**. Do not click Submit yet. Leave the tab open.
 6. Never create accounts, enter passwords or solve CAPTCHAs. If a site requires one, mark the job "needs you" and move on.
 
