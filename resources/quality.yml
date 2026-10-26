@@ -12,6 +12,11 @@ targets:
         chat_traces:
           # The chat app writes one trace per chat turn here (resources/chat_app.yml grants it CAN_EDIT).
           name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_chat_traces
+          # Authoritative like the index grants: the app's principal must be listed, or a deploy removes its access.
+          # The runner and the maintainer get CAN_MANAGE from the prod target's permissions.
+          permissions:
+            - service_principal_name: ${var.chat_app_sp}
+              level: CAN_EDIT
         output_eval:
           name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_output_eval
 
