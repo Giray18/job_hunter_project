@@ -122,3 +122,15 @@ def test_as_documents_carry_the_llm_context_per_job():
     assert doc["page_content"] == chat_logic.build_context(rows)
     assert doc["page_content"].startswith("[1] A - Data Engineer")
     assert doc["metadata"] == {"doc_uri": "u1", "chunk_id": "1", "search_score": 0.9}
+
+
+def test_turn_record_holds_what_the_replay_needs():
+    from datetime import UTC, datetime
+    rows = [{"job_id": "1", "company": "A", "title_en": "DE", "url": "u1", "search_score": 0.9}]
+    record = chat_logic.turn_record("t1", datetime(2026, 10, 27, 9, 0, tzinfo=UTC), "q?", Filters(work_modes=["remote"]),
+                                    2, {"index": "i", "query_type": "HYBRID"}, rows, "a", {"embed_ms": 12.345})
+    assert record["asked_at"] == "2026-10-27T09:00:00+00:00"
+    assert record["filters"]["work_modes"] == ["remote"] and record["index_filters_json"] == '{"work_mode": ["remote"]}'
+    assert record["documents"] == chat_logic.as_documents(rows)
+    assert (record["index"], record["timings_ms"]) == ("i", {"embed_ms": 12.3})
+    json.dumps(record)

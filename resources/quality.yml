@@ -3,20 +3,26 @@
 # Weekly, separate from the daily pipeline:
 # - evaluate_outputs: two LLM judges (fit-score calibration, cover-letter relevance) + format checks on the week's
 #   applications → MLflow run in output_eval + gold_output_quality.
-# - evaluate_chat: MLflow retrieval judges (groundedness, relevance, citations) on the chat app's traces.
+# - evaluate_chat: replays the chat turns the app saved in the chat_turns volume as MLflow traces, then scores
+#   them with MLflow retrieval judges (groundedness, relevance, citations). The app can't trace live: its network
+#   can't reach the storage MLflow uploads trace data to.
 
 targets:
   prod:
     resources:
+      volumes:
+        chat_turns:
+          # One JSON file per chat turn, written by the chat app (WRITE_VOLUME via its app resources).
+          catalog_name: ${var.catalog}
+          schema_name: ${resources.schemas.medallion.name}
+          name: chat_turns
+          volume_type: MANAGED
+          comment: Chat app turns (<date>/<turn_id>.json), replayed as MLflow traces by job_hunter_quality.
+
       experiments:
         chat_traces:
-          # The chat app writes one trace per chat turn here (resources/chat_app.yml grants it CAN_EDIT).
+          # Traces replayed from the chat_turns volume by evaluate_chat (one per chat turn).
           name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_chat_traces
-          # Authoritative like the index grants: the app's principal must be listed, or a deploy removes its access.
-          # The runner and the maintainer get CAN_MANAGE from the prod target's permissions.
-          permissions:
-            - service_principal_name: ${var.chat_app_sp}
-              level: CAN_EDIT
         output_eval:
           name: /Workspace/Users/${workspace.current_user.userName}/job_hunter_output_eval
 
@@ -49,12 +55,12 @@ targets:
                 package_name: job_hunter
                 entry_point: evaluate_chat
                 parameters:
+                  - "--turns-dir"
+                  - "/Volumes/${var.catalog}/${resources.schemas.medallion.name}/${resources.volumes.chat_turns.name}"
                   - "--experiment-id"
                   - "${resources.experiments.chat_traces.id}"
                   - "--model"
                   - "${var.llm_model}"
-                  - "--lookback-days"
-                  - "${var.quality_lookback_days}"
               environment_key: eval
           environments:
             - environment_key: eval
