@@ -1,5 +1,7 @@
 databricks-sdk>=0.40
-databricks-sql-connector>=3.4
+# >=4.8: the preinstalled 3.4 adds a urllib3 log filter that crashes on records without args, which aborted
+# MLflow trace uploads whenever urllib3 logged a retry.
+databricks-sql-connector>=4.8
 openai>=1.40
 # Not mlflow-tracing: it shares the `mlflow` package folder with the preinstalled mlflow-skinny, and a mix of
 # both versions fails on import. Upgrading mlflow-skinny itself keeps the folder consistent (it includes tracing).
