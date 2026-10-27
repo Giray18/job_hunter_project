@@ -65,4 +65,8 @@ jobs:
       # The chat app is started only on request (Free Edition limits app runtime and compute).
       - if: inputs.run_chat_app
         run: databricks bundle run job_hunter_chat -t prod
+      # The chat app's Unity Catalog privileges come from several places (app resources, schema and index grants,
+      # some authoritative). Check them after every deploy and grant back anything missing; a repair shows up as a
+      # warning on the run.
+      - run: uv run --no-dev --with databricks-sdk python -m job_hunter.app_grants --app job-hunter-chat
       # Optional: trigger the job right after deploying (it also runs daily on its own trigger).

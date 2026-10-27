@@ -120,7 +120,11 @@ targets:
             - principal: ${var.maintainer}
               privileges:
                 - ALL_PRIVILEGES
-            # The chat app's own service principal; its table/index/volume grants come from the app resources.
+            # The chat app's own service principal: read-only on the whole schema. Inherited by every table, the
+            # index and the volume, so authoritative object-level grants (e.g. the index's) can't take it away.
+            # The app resources (resources/chat_app.yml) grant the same objects individually.
             - principal: ${var.chat_app_sp}
               privileges:
                 - USE_SCHEMA
+                - SELECT
+                - READ_VOLUME
