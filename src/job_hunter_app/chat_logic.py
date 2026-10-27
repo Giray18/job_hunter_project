@@ -1,7 +1,8 @@
 """Pure logic of the job chat app: filters, SQL, prompt and answer parsing (no Databricks calls, unit-tested)."""
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 
 # Index columns returned by a vector search; the job details come from SQL afterwards.
 SEARCH_COLUMNS = ["job_id", "title_en", "company"]
@@ -164,3 +165,21 @@ def _placeholders(prefix: str, values: list[str], params: dict) -> str:
         params[name] = value
         names.append(f":{name}")
     return ", ".join(names)
+
+
+def turn_record(turn_id: str, asked_at: datetime, question: str, filters: Filters, history_turns: int, setup: dict,
+                rows: list[dict], answer: str, timings_ms: dict) -> dict:
+    """One chat turn as saved by the app; the quality job replays it as an MLflow trace (see job_hunter.chat_turns).
+    `setup` holds index, query_type, llm_model and embedding_model."""
+    return {
+        "turn_id": turn_id,
+        "asked_at": asked_at.isoformat(),
+        "question": question,
+        "filters": asdict(filters),
+        "index_filters_json": index_filters_json(filters),
+        "history_turns": history_turns,
+        **setup,
+        "documents": as_documents(rows),
+        "answer": answer,
+        "timings_ms": {k: round(v, 1) for k, v in timings_ms.items()},
+    }

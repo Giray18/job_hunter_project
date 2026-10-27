@@ -1,25 +1,31 @@
 """Databricks calls of the job chat app: vector search, SQL warehouse, Foundation Model API, volume files.
 
 Runs as the app's service principal; resources and permissions come from the bundle (resources/chat_app.yml).
-Chat turns are traced to the MLflow experiment in MLFLOW_EXPERIMENT_ID; a weekly job scores them with MLflow's
-retrieval judges.
+Each chat turn is saved as JSON in the chat_turns volume (JOB_HUNTER_CHAT_TURNS). The weekly quality job replays
+the turns as MLflow traces and scores them: the app's network can't reach the storage MLflow uploads traces to.
 """
 
+import io
+import json
 import logging
 import os
-from dataclasses import asdict
+import time
+import uuid
+from datetime import UTC, datetime
 from functools import cached_property
 
 import chat_logic
-import mlflow
 from chat_logic import Filters
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
-from mlflow.entities import SpanType
+from databricks.sdk.errors import DatabricksError
 
-# MLflow reports a failed trace export as a one-line warning; at DEBUG it includes the traceback.
-logging.getLogger("mlflow.tracing.export").setLevel(logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+def _ms_since(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
 
 
 class Backend:
@@ -30,6 +36,7 @@ class Backend:
         self.warehouse_id = os.environ["DATABRICKS_WAREHOUSE_ID"]
         self.llm_endpoint = os.environ["LLM_ENDPOINT"]
         self.embedding_endpoint = os.environ["EMBEDDING_ENDPOINT"]
+        self.chat_turns_dir = os.environ.get("JOB_HUNTER_CHAT_TURNS")
         self.config = Config()
         self.workspace = WorkspaceClient(config=self.config)
 
@@ -49,35 +56,36 @@ class Backend:
             return [{c: _plain(v) for c, v in zip(columns, row, strict=True)} for row in cur.fetchall()]
 
     def query_index(self, query: str, filters: Filters, query_type: str = "HYBRID",
-                    num_results: int = 15) -> list[dict]:
+                    num_results: int = 15, timings: dict | None = None) -> list[dict]:
         """Raw hits from the jobs index: the query is embedded with the same GTE model as the jobs, then searched
         by vector (ANN) or by vector + keywords (HYBRID). Each hit has job_id, title_en, company and score."""
-        with mlflow.start_span(name="embed_query", span_type=SpanType.EMBEDDING) as span:
-            span.set_inputs({"model": self.embedding_endpoint, "input": query})
-            vector = self.openai.embeddings.create(model=self.embedding_endpoint, input=[query]).data[0].embedding
-        with mlflow.start_span(name="jobs_index.query", span_type=SpanType.TOOL) as span:
-            filters_json = chat_logic.index_filters_json(filters)
-            span.set_inputs({"index": self.index_name, "query_type": query_type, "num_results": num_results,
-                             "filters_json": filters_json})
-            result = self.workspace.vector_search_indexes.query_index(
-                index_name=self.index_name,
-                columns=chat_logic.SEARCH_COLUMNS,
-                query_vector=vector,
-                query_text=query if query_type == "HYBRID" else None,
-                query_type=query_type,
-                num_results=num_results,
-                filters_json=filters_json,
-            )
-            columns = [c.name for c in result.manifest.columns] if result.manifest else []
-            hits = chat_logic.parse_hits(columns, result.result.data_array if result.result else None)
-            span.set_outputs(hits)
-        return hits
+        timings = {} if timings is None else timings
+        started = time.perf_counter()
+        vector = self.openai.embeddings.create(model=self.embedding_endpoint, input=[query]).data[0].embedding
+        timings["embed_ms"] = _ms_since(started)
+        started = time.perf_counter()
+        result = self.workspace.vector_search_indexes.query_index(
+            index_name=self.index_name,
+            columns=chat_logic.SEARCH_COLUMNS,
+            query_vector=vector,
+            query_text=query if query_type == "HYBRID" else None,
+            query_type=query_type,
+            num_results=num_results,
+            filters_json=chat_logic.index_filters_json(filters),
+        )
+        timings["index_ms"] = _ms_since(started)
+        columns = [c.name for c in result.manifest.columns] if result.manifest else []
+        return chat_logic.parse_hits(columns, result.result.data_array if result.result else None)
 
     def search(self, question: str, filters: Filters, query_type: str = "HYBRID",
-               num_results: int = 15) -> list[dict]:
+               num_results: int = 15, timings: dict | None = None) -> list[dict]:
         """Index hits joined with the job details from SQL, in hit order, with search_rank and search_score."""
-        hits = self.query_index(question, filters, query_type, num_results)
-        return chat_logic.with_hits(self.jobs(filters, [h["job_id"] for h in hits]), hits)
+        timings = {} if timings is None else timings
+        hits = self.query_index(question, filters, query_type, num_results, timings)
+        started = time.perf_counter()
+        rows = chat_logic.with_hits(self.jobs(filters, [h["job_id"] for h in hits]), hits)
+        timings["sql_ms"] = _ms_since(started)
+        return rows
 
     def index_info(self) -> dict:
         """Name, endpoint, type and sync status of the jobs index."""
@@ -96,34 +104,36 @@ class Backend:
         }
 
     def chat(self, question: str, filters: Filters, history: list[dict]) -> tuple[str, list[dict]]:
-        """One RAG turn, traced: retrieve jobs from the index (RETRIEVER span), then answer from them."""
-        with mlflow.start_span(name="job_chat", span_type=SpanType.CHAIN) as span:
-            span.set_inputs({"question": question, "filters": asdict(filters)})
-            rows = self.retrieve(question, filters)
-            answer = self.answer(question, rows, history)
-            span.set_outputs({"answer": answer})
+        """One RAG turn: retrieve jobs from the index, answer from them, save the turn for the trace replay."""
+        asked_at, timings = datetime.now(UTC), {}
+        rows = self.search(question, filters, timings=timings)
+        started = time.perf_counter()
+        answer = self.answer(question, rows, history)
+        timings["answer_ms"] = _ms_since(started)
+        setup = {"index": self.index_name, "query_type": "HYBRID", "llm_model": self.llm_endpoint,
+                 "embedding_model": self.embedding_endpoint}
+        self.save_turn(chat_logic.turn_record(uuid.uuid4().hex, asked_at, question, filters, len(history) // 2,
+                                              setup, rows, answer, timings))
         return answer, rows
 
-    def retrieve(self, question: str, filters: Filters) -> list[dict]:
-        with mlflow.start_span(name="retrieve_jobs", span_type=SpanType.RETRIEVER) as span:
-            span.set_inputs({"query": question})
-            rows = self.search(question, filters)
-            span.set_outputs(chat_logic.as_documents(rows))
-        return rows
-
     def answer(self, question: str, rows: list[dict], history: list[dict]) -> str:
-        messages = chat_logic.chat_messages(question, rows, history)
-        with mlflow.start_span(name="answer", span_type=SpanType.CHAT_MODEL) as span:
-            span.set_inputs({"model": self.llm_endpoint, "messages": messages})
-            resp = self.openai.chat.completions.create(
-                model=self.llm_endpoint,
-                messages=messages,
-                max_tokens=2500,
-                temperature=0.2,
-            )
-            text = chat_logic.message_text(resp.choices[0].message.content)
-            span.set_outputs(text)
-        return text
+        resp = self.openai.chat.completions.create(
+            model=self.llm_endpoint,
+            messages=chat_logic.chat_messages(question, rows, history),
+            max_tokens=2500,
+            temperature=0.2,
+        )
+        return chat_logic.message_text(resp.choices[0].message.content)
+
+    def save_turn(self, record: dict) -> None:
+        """Best effort: a turn that can't be saved is only missing from the traces, the answer is unaffected."""
+        if not self.chat_turns_dir:
+            return
+        path = f"{self.chat_turns_dir}/{record['asked_at'][:10]}/{record['turn_id']}.json"
+        try:
+            self.workspace.files.upload(path, io.BytesIO(json.dumps(record).encode()), overwrite=True)
+        except DatabricksError as error:
+            logger.warning("Could not save chat turn %s: %s", record["turn_id"], error)
 
     def download(self, volume_path: str) -> bytes:
         with self.workspace.files.download(volume_path).contents as f:

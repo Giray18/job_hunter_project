@@ -5,7 +5,6 @@ import os
 import time
 
 import chat_logic
-import mlflow
 import streamlit as st
 from backend import Backend
 from chat_logic import NO_STATUS, Filters
@@ -112,13 +111,10 @@ def semantic_tab(filters: Filters):
         num_results = right.slider("Results", 5, 50, 15, step=5)
         submitted = st.form_submit_button("Search the index")
     if submitted and query:
-        with mlflow.start_span(name="semantic_search") as span:
-            span.set_inputs({"query": query, "query_type": SEARCH_MODES[mode], "num_results": num_results})
-            started = time.perf_counter()
-            hits = backend().query_index(query, filters, SEARCH_MODES[mode], num_results)
-            index_ms = (time.perf_counter() - started) * 1000
-            rows = chat_logic.with_hits(backend().jobs(filters, [h["job_id"] for h in hits]), hits)
-            span.set_outputs({"hits": len(hits), "rows": len(rows)})
+        started = time.perf_counter()
+        hits = backend().query_index(query, filters, SEARCH_MODES[mode], num_results)
+        index_ms = (time.perf_counter() - started) * 1000
+        rows = chat_logic.with_hits(backend().jobs(filters, [h["job_id"] for h in hits]), hits)
         st.session_state["semantic"] = {"hits": hits, "rows": rows, "mode": SEARCH_MODES[mode], "ms": index_ms,
                                         "filters": chat_logic.index_filters_json(filters)}
     result = st.session_state.get("semantic")
