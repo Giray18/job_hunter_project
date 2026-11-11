@@ -12,3 +12,7 @@ scratch/**
 
 # Local Gmail OAuth client secret and token - never commit
 .secrets/
+
+# Local MLflow runs and traces
+mlruns/
+mlartifacts/
